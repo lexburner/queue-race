@@ -91,6 +91,9 @@ public class DemoTester {
                 ConcurrentMap<String, AtomicInteger> offsets = new ConcurrentHashMap<>();
                 for (int j = 0; j < eachCheckQueueNum; j++) {
                     String queueName = "Queue-" + random.nextInt(queueNum);
+                    while (offsets.containsKey(queueName)) {
+                        queueName = "Queue-" + random.nextInt(queueNum);
+                    }
                     offsets.put(queueName, queueNumMap.get(queueName));
                 }
                 checks[i] = new Thread(new Consumer(queueStore, i, maxCheckTime, checkCounter, offsets));
