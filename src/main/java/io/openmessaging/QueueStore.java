@@ -19,7 +19,7 @@ public abstract class QueueStore {
      * 返回的Collection会被并发读，但不涉及写，因此只需要是线程读安全就可以了；
      * @param queueName 代表队列的名字
      * @param offset 代表消息的在这个队列中的起始消息索引
-     * @param num 代表读取的消息的条数，如果消息足够，则返回num条，否则只返回已有的消息即可
+     * @param num 代表读取的消息的条数，如果消息足够，则返回num条，否则只返回已有的消息即可;没有消息了，则返回一个空的集合
      */
     abstract Collection<String> get(String queueName, long offset, long num);
 }

@@ -7,8 +7,10 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-public class DemoTester {
+//这是评测程序的一个demo版本，其评测逻辑与实际评测程序基本类似，但是比实际评测简单很多
+//该评测程序主要便于选手在本地优化和调试自己的程序
 
+public class DemoTester {
 
     public static void main(String args[]) throws Exception {
         //评测相关配置
@@ -43,70 +45,69 @@ public class DemoTester {
             t.printStackTrace();
             System.exit(-1);
         }
+
         //Step1: 发送消息
-        {
-            long sendStart = System.currentTimeMillis();
-            long maxTimeStamp = System.currentTimeMillis() + sendTime;
-            AtomicLong sendCounter = new AtomicLong(0);
-            Thread[] sends = new Thread[sendTsNum];
-            for (int i = 0; i < sendTsNum; i++) {
-                sends[i] = new Thread(new Producer(queueStore, i, maxTimeStamp, msgNum, sendCounter, queueNumMap));
-            }
-            for (int i = 0; i < sendTsNum; i++) {
-                sends[i].start();
-            }
-            for (int i = 0; i < sendTsNum; i++) {
-                sends[i].join();
-            }
-            long sendSend = System.currentTimeMillis();
-            System.out.printf("Send: %d ms Num:%d\n", sendSend - sendStart, sendCounter.get());
+        long sendStart = System.currentTimeMillis();
+        long maxTimeStamp = System.currentTimeMillis() + sendTime;
+        AtomicLong sendCounter = new AtomicLong(0);
+        Thread[] sends = new Thread[sendTsNum];
+        for (int i = 0; i < sendTsNum; i++) {
+            sends[i] = new Thread(new Producer(queueStore, i, maxTimeStamp, msgNum, sendCounter, queueNumMap));
         }
+        for (int i = 0; i < sendTsNum; i++) {
+            sends[i].start();
+        }
+        for (int i = 0; i < sendTsNum; i++) {
+            sends[i].join();
+        }
+        long sendSend = System.currentTimeMillis();
+        System.out.printf("Send: %d ms Num:%d\n", sendSend - sendStart, sendCounter.get());
         long maxCheckTime = System.currentTimeMillis() + checkTime;
+
         //Step2: 索引的正确性校验
-        {
-            long indexCheckStart = System.currentTimeMillis();
-            AtomicLong indexCheckCounter = new AtomicLong(0);
-            Thread[] indexChecks = new Thread[sendTsNum];
-            for (int i = 0; i < sendTsNum; i++) {
-                indexChecks[i] = new Thread(new IndexChecker(queueStore, i, maxCheckTime, checkNum, indexCheckCounter, queueNumMap));
-            }
-            for (int i = 0; i < sendTsNum; i++) {
-                indexChecks[i].start();
-            }
-            for (int i = 0; i < sendTsNum; i++) {
-                indexChecks[i].join();
-            }
-            long indexCheckEnd = System.currentTimeMillis();
-            System.out.printf("Index Check: %d ms Num:%d\n", indexCheckEnd - indexCheckStart, indexCheckCounter.get());
+        long indexCheckStart = System.currentTimeMillis();
+        AtomicLong indexCheckCounter = new AtomicLong(0);
+        Thread[] indexChecks = new Thread[checkTsNum];
+        for (int i = 0; i < sendTsNum; i++) {
+            indexChecks[i] = new Thread(new IndexChecker(queueStore, i, maxCheckTime, checkNum, indexCheckCounter, queueNumMap));
         }
+        for (int i = 0; i < sendTsNum; i++) {
+            indexChecks[i].start();
+        }
+        for (int i = 0; i < sendTsNum; i++) {
+            indexChecks[i].join();
+        }
+        long indexCheckEnd = System.currentTimeMillis();
+        System.out.printf("Index Check: %d ms Num:%d\n", indexCheckEnd - indexCheckStart, indexCheckCounter.get());
 
         //Step3: 消费消息，并验证顺序性
-        {
-            long checkStart = System.currentTimeMillis();
-            Random random = new Random();
-            AtomicLong checkCounter = new AtomicLong(0);
-            Thread[] checks = new Thread[sendTsNum];
-            for (int i = 0; i < sendTsNum; i++) {
-                int eachCheckQueueNum = checkQueueNum/checkTsNum;
-                ConcurrentMap<String, AtomicInteger> offsets = new ConcurrentHashMap<>();
-                for (int j = 0; j < eachCheckQueueNum; j++) {
-                    String queueName = "Queue-" + random.nextInt(queueNum);
-                    while (offsets.containsKey(queueName)) {
-                        queueName = "Queue-" + random.nextInt(queueNum);
-                    }
-                    offsets.put(queueName, queueNumMap.get(queueName));
+        long checkStart = System.currentTimeMillis();
+        Random random = new Random();
+        AtomicLong checkCounter = new AtomicLong(0);
+        Thread[] checks = new Thread[checkTsNum];
+        for (int i = 0; i < sendTsNum; i++) {
+            int eachCheckQueueNum = checkQueueNum/checkTsNum;
+            ConcurrentMap<String, AtomicInteger> offsets = new ConcurrentHashMap<>();
+            for (int j = 0; j < eachCheckQueueNum; j++) {
+                String queueName = "Queue-" + random.nextInt(queueNum);
+                while (offsets.containsKey(queueName)) {
+                    queueName = "Queue-" + random.nextInt(queueNum);
                 }
-                checks[i] = new Thread(new Consumer(queueStore, i, maxCheckTime, checkCounter, offsets));
+                offsets.put(queueName, queueNumMap.get(queueName));
             }
-            for (int i = 0; i < sendTsNum; i++) {
-                checks[i].start();
-            }
-            for (int i = 0; i < sendTsNum; i++) {
-                checks[i].join();
-            }
-            long checkEnd = System.currentTimeMillis();
-            System.out.printf("Check: %d ms Num: %d\n", checkEnd - checkStart, checkCounter.get());
+            checks[i] = new Thread(new Consumer(queueStore, i, maxCheckTime, checkCounter, offsets));
         }
+        for (int i = 0; i < sendTsNum; i++) {
+            checks[i].start();
+        }
+        for (int i = 0; i < sendTsNum; i++) {
+            checks[i].join();
+        }
+        long checkEnd = System.currentTimeMillis();
+        System.out.printf("Check: %d ms Num: %d\n", checkEnd - checkStart, checkCounter.get());
+
+        //评测结果
+        System.out.printf("Tps:%f\n", ((sendCounter.get() + checkCounter.get()) + 0.1) / ((sendSend- sendStart) + (checkEnd- checkStart)));
     }
     static class Producer implements Runnable {
 
