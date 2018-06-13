@@ -90,7 +90,8 @@ public class DemoTester {
                 int eachCheckQueueNum = checkQueueNum/checkTsNum;
                 ConcurrentMap<String, AtomicInteger> offsets = new ConcurrentHashMap<>();
                 for (int j = 0; j < eachCheckQueueNum; j++) {
-                    offsets.put("Queue-" + random.nextInt(queueNum), new AtomicInteger(0));
+                    String queueName = "Queue-" + random.nextInt(queueNum);
+                    offsets.put(queueName, queueNumMap.get(queueName));
                 }
                 checks[i] = new Thread(new Consumer(queueStore, i, maxCheckTime, checkCounter, offsets));
             }
@@ -123,10 +124,10 @@ public class DemoTester {
 
         @Override
         public void run() {
-            Random random = new Random();
-            while (counter.getAndIncrement() < maxMsgNum && System.currentTimeMillis() <= maxTimeStamp) {
+            long count;
+            while ( (count = counter.getAndIncrement()) < maxMsgNum && System.currentTimeMillis() <= maxTimeStamp) {
                 try {
-                    String queueName = "Queue-" + random.nextInt(queueCounter.size());
+                    String queueName = "Queue-" + count % queueCounter.size();
                     synchronized (queueCounter.get(queueName)) {
                         queueStore.put(queueName, String.valueOf(queueCounter.get(queueName).getAndIncrement()));
                     }
@@ -196,13 +197,17 @@ public class DemoTester {
 
         @Override
         public void run() {
-            while (offsets.size() > 0 && System.currentTimeMillis() <= maxTimeStamp) {
+            ConcurrentMap<String, AtomicInteger> pullOffsets = new ConcurrentHashMap<>();
+            for (String queueName: offsets.keySet()) {
+                pullOffsets.put(queueName, new AtomicInteger(0));
+            }
+            while (pullOffsets.size() > 0 && System.currentTimeMillis() <= maxTimeStamp) {
                 try {
-                    for (String queueName : offsets.keySet()) {
-                        int index = offsets.get(queueName).get();
+                    for (String queueName : pullOffsets.keySet()) {
+                        int index = pullOffsets.get(queueName).get();
                         Collection<String> msgs = queueStore.get(queueName, index, 10);
                         if (msgs != null && msgs.size() > 0) {
-                            offsets.get(queueName).getAndAdd(msgs.size());
+                            pullOffsets.get(queueName).getAndAdd(msgs.size());
                             for (String msg : msgs) {
                                 if (!msg.equals(String.valueOf(index++))) {
                                     System.out.println("Check error");
@@ -213,7 +218,11 @@ public class DemoTester {
                             counter.addAndGet(msgs.size());
                         }
                         if (msgs == null || msgs.size() < 10) {
-                            offsets.remove(queueName);
+                            if (pullOffsets.get(queueName).get() != offsets.get(queueName).get()) {
+                                System.out.printf("Queue Number Error");
+                                System.exit(-1);
+                            }
+                            pullOffsets.remove(queueName);
                         }
                     }
                 } catch (Throwable t) {
