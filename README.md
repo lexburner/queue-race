@@ -14,6 +14,9 @@ Apache RocketMQ作为的一款分布式的消息中间件，历年双十一承�
 ### 2.2 语言限定
 JAVA和C++
 
+注意：C++的Demo还在制作中（预计两天后可以出来），其核心逻辑与Java是一致的。选手们可以参考Java先行开始代码编写。
+
+
 ## 3.  程序目标
 
 仔细阅读demo项目中的QueueStore，DefaultQueueStoreImpl，DemoTester三个类。
