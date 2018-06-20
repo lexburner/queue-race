@@ -42,7 +42,11 @@ abstract Collection<String> get(String queueName, long offset, long num);
 
 
 ## 4. 测试环境描述
-测试环境为4c8g的ECS，限定使用的最大JVM大小为4GB(-Xmx4g)。带一块500G左右大小的SSD磁盘。
+测试环境为4c8g的ECS，限定使用的最大JVM大小为4GB(-Xmx4g)。带一块300G左右大小的SSD磁盘。
+
+SSD性能大致如下：
+iops 1w 左右；块读写能力(一次读写4K以上) 在200MB/s 左右。
+
 
 ## 5. 程序校验逻辑
 
