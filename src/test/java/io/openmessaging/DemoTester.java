@@ -107,7 +107,7 @@ public class DemoTester {
         System.out.printf("Check: %d ms Num: %d\n", checkEnd - checkStart, checkCounter.get());
 
         //评测结果
-        System.out.printf("Tps:%f\n", ((sendCounter.get() + checkCounter.get()) + 0.1) * 1000 / ((sendSend- sendStart) + (checkEnd- checkStart)));
+        System.out.printf("Tps:%f\n", ((sendCounter.get() + checkCounter.get() + indexCheckCounter.get()) + 0.1) * 1000 / ((sendSend- sendStart) + (checkEnd- checkStart) + (indexCheckEnd - indexCheckStart)));
     }
     static class Producer implements Runnable {
 
