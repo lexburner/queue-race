@@ -26,7 +26,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
 
 
 //    public static final String dir = "/Users/kirito/data/";
-    public static final String dir = "/alidata1/race2018/data";
+    public static final String dir = "/alidata1/race2018/data/";
 
 
     //仅允许依赖JavaSE 8 包含的lib
