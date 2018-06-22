@@ -15,7 +15,7 @@ public class DemoTester {
     public static void main(String args[]) throws Exception {
         //评测相关配置
         //发送阶段的发送数量，也即发送阶段必须要在规定时间内把这些消息发送完毕方可
-        int msgNum  = 100000;
+        int msgNum  = 10000000;
         //发送阶段的最大持续时间，也即在该时间内，如果消息依然没有发送完毕，则退出评测
         int sendTime = 10 * 60 * 1000;
         //消费阶段的最大持续时间，也即在该时间内，如果消息依然没有消费完毕，则退出评测
@@ -27,9 +27,9 @@ public class DemoTester {
         //消费阶段的总队列数量
         int checkQueueNum = 100;
         //发送的线程数量
-        int sendTsNum = 3;
+        int sendTsNum = 10;
         //消费的线程数量
-        int checkTsNum = 3;
+        int checkTsNum = 10;
 
         ConcurrentMap<String, AtomicInteger> queueNumMap = new ConcurrentHashMap<>();
         for (int i = 0; i < queueNum; i++) {
@@ -133,7 +133,7 @@ public class DemoTester {
                 try {
                     String queueName = "Queue-" + count % queueCounter.size();
                     synchronized (queueCounter.get(queueName)) {
-                        queueStore.put(queueName, String.valueOf(queueCounter.get(queueName).getAndIncrement()));
+                        queueStore.put(queueName, String.valueOf(queueCounter.get(queueName).getAndIncrement()).getBytes());
                     }
                 } catch (Throwable t) {
                     t.printStackTrace();
@@ -168,9 +168,9 @@ public class DemoTester {
                     String queueName = "Queue-" + random.nextInt(queueCounter.size());
                     int index = random.nextInt(queueCounter.get(queueName).get()) - 10;
                     if (index < 0) index = 0;
-                    Collection<String> msgs = queueStore.get(queueName, index, 10);
-                    for (String msg : msgs) {
-                        if (!msg.equals(String.valueOf(index++))) {
+                    Collection<byte[]> msgs = queueStore.get(queueName, index, 10);
+                    for (byte[] msg : msgs) {
+                        if (!new String(msg).equals(String.valueOf(index++))) {
                             System.out.println("Check error");
                             System.exit(-1);
                         }
@@ -209,11 +209,11 @@ public class DemoTester {
                 try {
                     for (String queueName : pullOffsets.keySet()) {
                         int index = pullOffsets.get(queueName).get();
-                        Collection<String> msgs = queueStore.get(queueName, index, 10);
+                        Collection<byte[]> msgs = queueStore.get(queueName, index, 10);
                         if (msgs != null && msgs.size() > 0) {
                             pullOffsets.get(queueName).getAndAdd(msgs.size());
-                            for (String msg : msgs) {
-                                if (!msg.equals(String.valueOf(index++))) {
+                            for (byte[] msg : msgs) {
+                                if (!new String(msg).equals(String.valueOf(index++))) {
                                     System.out.println("Check error");
                                     System.exit(-1);
                                 }

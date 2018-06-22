@@ -13,20 +13,20 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DefaultQueueStoreImpl extends QueueStore {
 
 
-    public static Collection<String> EMPTY = new ArrayList<String>();
-    Map<String, List<String>> queueMap = new ConcurrentHashMap<String, List<String>>();
+    public static Collection<byte[]> EMPTY = new ArrayList<byte[]>();
+    Map<String, List<byte[]>> queueMap = new ConcurrentHashMap<String, List<byte[]>>();
 
-    public synchronized void put(String queueName, String message) {
+    public synchronized void put(String queueName, byte[] message) {
         if (!queueMap.containsKey(queueName)) {
-            queueMap.put(queueName, new ArrayList<String>());
+            queueMap.put(queueName, new ArrayList<byte[]>());
         }
         queueMap.get(queueName).add(message);
     }
-    public synchronized Collection<String> get(String queueName, long offset, long num) {
+    public synchronized Collection<byte[]> get(String queueName, long offset, long num) {
         if (!queueMap.containsKey(queueName)) {
             return EMPTY;
         }
-        List<String> msgs = queueMap.get(queueName);
+        List<byte[]> msgs = queueMap.get(queueName);
         return msgs.subList((int) offset, offset + num > msgs.size() ? msgs.size() : (int) (offset + num));
     }
 }
