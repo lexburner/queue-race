@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-    private final int fileSize = 512 * 1024 * 1024;
+    private final int fileSize = 1024 * 1024 * 1024;
 
 
 //    public static final String dir = "/Users/kirito/data/";
