@@ -1,19 +1,13 @@
 package io.openmessaging;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -22,70 +16,22 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-    private final int fileSize = 1024 * 1024 * 1024;
 
+    public static final String dir = "/Users/kirito/data/";
+//    public static final String dir = "/alidata1/race2018/data/";
 
-//    public static final String dir = "/Users/kirito/data/";
-    public static final String dir = "/alidata1/race2018/data/";
-
-
-    //仅允许依赖JavaSE 8 包含的lib
-    Map<String, MappedByteBuffer> queueBuffer = new ConcurrentHashMap<String, MappedByteBuffer>();
-    Map<String, MappedByteBuffer> oBuff = new ConcurrentHashMap<String, MappedByteBuffer>();
-    FileChannel fileChannel;
-    MappedByteBuffer mappedByteBuffer;
-    AtomicInteger wrotePosition = new AtomicInteger(0);
-    AtomicInteger wrotePositionabc = new AtomicInteger(0);
+    //存储 queue 的索引文件
+    Map<String, Index> indexMap = new ConcurrentHashMap<>();
+    //存储 queueName 和 queue 编号 的映射关系
+    Map<String, Integer> queueNameQueueNoMap = new ConcurrentHashMap<>();
+    //存储 (queueNo % CommitLog.commitLogNum) 对应的实际 commitLog
+    Map<Integer, CommitLog> commitLogMap = new ConcurrentHashMap<>();
+    //queue计数器
+    AtomicInteger queueCnt = new AtomicInteger(0);
 
     ConcurrentMap<String, AtomicInteger> queueNumMap = new ConcurrentHashMap<>();
 
-    AtomicInteger wrotePosition1 = new AtomicInteger(0);
-
-    BlockingQueue<ByteBuffer> queue = new LinkedBlockingQueue<ByteBuffer>();
-
-    {
-
-        try {
-            this.fileChannel = new RandomAccessFile(new File(dir+"lrz"), "rw").getChannel();  //初始化fileChannel
-            this.mappedByteBuffer = this.fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, fileSize); //初始化mappedByteBuffer  对得到的缓冲区的更改最终将写入文件；
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        // getMmap();
-
-        new Thread(() -> {
-           while (true) { //没有停止
-                try {
-                    runjob();
-                   // main1(null);
-                    Thread.sleep(25);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
-    }
-
-
-    private MappedByteBuffer getMmap(String name) {
-        MappedByteBuffer mappedByteBuffer = null;
-        try {
-            FileChannel fileChannel = new RandomAccessFile(new File(dir + name), "rw").getChannel();  //初始化fileChannel
-            mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, 4 * 30000); //初始化mappedByteBuffer  对得到的缓冲区的更改最终将写入文件；
-            ByteBuffer byteBuffer = mappedByteBuffer.slice();
-            for (int i = 0; i < 30000; i++) {
-                byteBuffer.position(i*4);
-                byteBuffer.putInt(Integer.MAX_VALUE);
-            }
-        } catch (IOException e) {
-//            e.printStackTrace();
-        }
-        return mappedByteBuffer;
-    }
-
-
     public static Collection<byte[]> EMPTY = new ArrayList<>();
-
 
     /**
      * 把一条消息写入一个队列；
@@ -98,43 +44,55 @@ public class DefaultQueueStoreImpl extends QueueStore {
      */
     @Override
     public synchronized void put(String queueName, byte[] message) {
-        if (!queueBuffer.containsKey(queueName)) {
-            queueBuffer.put(queueName, getMmap(queueName));
+        Integer queueNo = queueNameQueueNoMap.get(queueName);
+        if (queueNo==null) {
+            queueNo = queueCnt.incrementAndGet();
+            // 新建index
+            indexMap.put(queueName, new Index(queueName));
+            // 存放queueName和queueNo的关联
+            queueNameQueueNoMap.put(queueName, queueNo);
+        }
+        Integer commitLogId = queueNo % CommitLog.commitLogNum;
+        CommitLog commitLog = commitLogMap.get(commitLogId);
+        if (commitLog == null) {
+            CommitLog newCommitLog = new CommitLog(commitLogId);
+            //新建 commitLog
+            commitLogMap.put(commitLogId, newCommitLog);
+            commitLog = newCommitLog;
         }
 
-        int len = queueName.getBytes().length;
-        int len1 = message.length;
 
+        int queueNameLength = queueName.getBytes().length;
+        int messageLength = message.length;
 
-        if(wrotePosition.get()+(len+len1+2)>fileSize){
-            //新建文件
-            System.out.println("===========================");
-        }
+        byte[] lengthArray = new byte[2];
+        lengthArray[0] = (byte) (queueNameLength & 0xFF);
+        lengthArray[1] = (byte) (messageLength & 0xFF);
 
-        byte[] lengs = new byte[2];
-        lengs[0] = (byte) (len & 0xFF);
-        lengs[1] = (byte) (len1 & 0xFF);
-
-        ByteBuffer byteBuffer = this.mappedByteBuffer.slice();//ByteBuffer.allocateDirect(len+len1+2);
-        byteBuffer.position(wrotePosition.get()); //设置position为当前写位置
-        //System.out.println(wrotePosition.get());
-        byteBuffer.put(lengs);
+        ByteBuffer byteBuffer = commitLog.mappedByteBuffer.slice();
+        //设置position为当前写位置
+        int position = commitLog.commitLogWritePosition.get();
+        byteBuffer.position(position);
+        byteBuffer.put(lengthArray);
         byteBuffer.put(queueName.getBytes());
         byteBuffer.put(message);
-        this.wrotePosition.addAndGet(len + len1 + 2);//原子操作
-        //System.out.println(wrotePositionabc.getAndIncrement());
-        /*if(wrotePositionabc.get()>299996){
+        //移动写指针
+        commitLog.commitLogWritePosition.addAndGet(queueNameLength + messageLength + 2);
+        //强制刷盘，防止内存溢出
+        //TODO 不要实时刷盘
+        //BUG 实时刷盘会卡死
+        commitLog.mappedByteBuffer.force();
 
-        }*/
-
-
-
+        //建立索引
+        Index index = indexMap.get(queueName);
+        ByteBuffer slice = index.mappedByteBuffer.slice();
+        slice.position(index.IndexWrotePosition.get());
+        slice.putInt(position);
+        index.IndexWrotePosition.addAndGet(4);
+        //TODO 不要实时刷盘
+        //BUG 实时刷盘会卡死
+        index.mappedByteBuffer.force();
     }
-
-    private ByteBuffer getByteBuff() {
-        return this.mappedByteBuffer.slice();
-    }
-
 
     /**
      * 从一个队列中读出一批消息，读出的消息要按照发送顺序来；
@@ -149,118 +107,39 @@ public class DefaultQueueStoreImpl extends QueueStore {
     public synchronized Collection<byte[]> get(String queueName, long offset, long num) {
 
         List<byte[]> list = new ArrayList<>();
-        if (!queueBuffer.containsKey(queueName)) {
+        if (!indexMap.containsKey(queueName)) {
             return EMPTY;
         }
 
+        Index index = indexMap.get(queueName);
 
-        ByteBuffer abc = queueBuffer.get(queueName).slice();//ByteBuffer.allocateDirect(len+len1+2);
-        ByteBuffer byteBuffer = getByteBuff();//ByteBuffer.allocateDirect(len+len1+2);
+        ByteBuffer indexByteBuffer = index.mappedByteBuffer;
+        int commitLogNo = queueNameQueueNoMap.get(queueName) % CommitLog.commitLogNum;
+        ByteBuffer commitLog = commitLogMap.get(commitLogNo).mappedByteBuffer;
 
-        for (long i = 0; i < num  ; i++) {
-            abc.position((int) ((offset + i)*4));
-            int pos = abc.getInt();
+        for (long i = 0; i < num; i++) {
+            indexByteBuffer.position((int) ((offset + i) * 4));
+            int pos = indexByteBuffer.getInt();
 
-            if(pos==Integer.MAX_VALUE){
+            if (pos == Integer.MAX_VALUE) {
                 break;
             }
 
+            commitLog.position(pos);
 
-            byteBuffer.position(pos);
-            byte[] lengs = new byte[2];
+            byte[] lengthArray = new byte[2];
+            commitLog.get(lengthArray);
 
-            byteBuffer.get(lengs);
-            int len = lengs[0];
-            int len1 = lengs[1];
+            int queueNameLength = lengthArray[0];
+            int messageLength = lengthArray[1];
 
-            byte[] lenga = new byte[len];
-            byte[] lenga2 = new byte[len1];
-            byteBuffer.get(lenga);
-            byteBuffer.get(lenga2);
-            list.add(lenga2);
+            byte[] queueNameBytes = new byte[queueNameLength];
+            byte[] messageBytes = new byte[messageLength];
+            commitLog.get(queueNameBytes);
+            commitLog.get(messageBytes);
+            list.add(messageBytes);
         }
         return list;
     }
 
-    public  void runjob() {
-
-        ByteBuffer byteBuffer = getByteBuff();//ByteBuffer.allocateDirect(len+len1+2);
-        byteBuffer.position(wrotePosition1.get());
-        // byteBuffer.clear();
-
-        while(true) {
-            //System.out.println(len);
-            byte[] lengs = new byte[2];
-
-            byteBuffer.get(lengs);
-            int len = lengs[0];
-            int len1 = lengs[1];
-
-            if (len == 0 || len1==0) {
-                break;
-            }
-            byte[] lenga = new byte[len];
-            byte[] lenga2 = new byte[len1];
-            ////System.out.println(len);
-            byteBuffer.get(lenga);
-            byteBuffer.get(lenga2);
-
-            String queueName = new String(lenga);
-            byte[] msg = lenga2;
-           // //System.out.println(queueName+"----------->"+msg);
-           // printWriter.println(queueName+"----------->"+msg);
-
-            //if(queueName!=null && queueName.)
-
-            if((len+len1) != (queueName.length()+msg.length)){
-                break;
-            }
-
-            try {
-                if (!queueBuffer.containsKey(queueName)) {
-                   // System.out.println((len+len1) +"--------->"+ (queueName.length()+msg.length()));
-                  //  System.out.println(queueName+"----------->"+msg);
-                    queueBuffer.put(queueName, getMmap(queueName));
-                }
-
-                if (!queueNumMap.containsKey(queueName)) {
-                    // System.out.println((len+len1) +"--------->"+ (queueName.length()+msg.length()));
-                    //  System.out.println(queueName+"----------->"+msg);
-                    queueNumMap.put(queueName, new AtomicInteger(0));
-                }
-            } catch (Exception e) {
-               break;
-            }
-
-            ByteBuffer abc = queueBuffer.get(queueName).slice();//ByteBuffer.allocateDirect(len+len1+2);
-            abc.position(queueNumMap.get(queueName).get()); //设置position为当前写位置
-            abc.putInt(wrotePosition1.get());
-            wrotePosition1.addAndGet(len + len1 + 2);//原子操作
-            queueNumMap.get(queueName).addAndGet(4);
-
-
-
-        }
-    }
-
-
-
-    public static void main(String[] args) {
-        //main1(args);
-
-        DefaultQueueStoreImpl defaultQueueStoreImpl = new DefaultQueueStoreImpl();
-        for (int i = 0; i < 1000; i++) {
-           Collection<byte[]> msgs = defaultQueueStoreImpl.get("Queue-"+i, 16, 10);
-           //Collection<String> msgs = defaultQueueStoreImpl.get("Queue-396", 0, 40);
-            System.out.println("Queue-"+i);
-            for (byte[] str : msgs) {
-                System.out.println(new String(str));
-            }
-            try {
-                Thread.sleep(3000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
 }
