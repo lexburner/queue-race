@@ -1,13 +1,11 @@
 package io.openmessaging;
 
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -15,7 +13,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 实际提交时，请维持包名和类名不变，把方法实现修改为自己的内容；
  */
 public class DefaultQueueStoreImpl extends QueueStore {
-
 
     public static final String dir = "/Users/kirito/data/";
 //    public static final String dir = "/alidata1/race2018/data/";
@@ -28,8 +25,6 @@ public class DefaultQueueStoreImpl extends QueueStore {
     Map<Integer, CommitLog> commitLogMap = new ConcurrentHashMap<>();
     //queue计数器
     AtomicInteger queueCnt = new AtomicInteger(0);
-
-    ConcurrentMap<String, AtomicInteger> queueNumMap = new ConcurrentHashMap<>();
 
     public static Collection<byte[]> EMPTY = new ArrayList<>();
 
