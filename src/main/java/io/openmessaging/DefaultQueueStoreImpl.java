@@ -38,7 +38,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
      * @param message   message，代表消息的内容，评测时内容会随机产生，大部分长度在64字节左右，会有少量消息在1k左右
      */
     @Override
-    public synchronized void put(String queueName, byte[] message) {
+    public void put(String queueName, byte[] message) {
         Integer queueNo = queueNameQueueNoMap.get(queueName);
         if (queueNo==null) {
             queueNo = queueCnt.incrementAndGet();
@@ -56,37 +56,39 @@ public class DefaultQueueStoreImpl extends QueueStore {
             commitLog = newCommitLog;
         }
 
+        synchronized(commitLog){
+            int queueNameLength = queueName.getBytes().length;
+            int messageLength = message.length;
 
-        int queueNameLength = queueName.getBytes().length;
-        int messageLength = message.length;
+            byte[] lengthArray = new byte[2];
+            lengthArray[0] = (byte) (queueNameLength & 0xFF);
+            lengthArray[1] = (byte) (messageLength & 0xFF);
 
-        byte[] lengthArray = new byte[2];
-        lengthArray[0] = (byte) (queueNameLength & 0xFF);
-        lengthArray[1] = (byte) (messageLength & 0xFF);
+            ByteBuffer byteBuffer = commitLog.mappedByteBuffer.slice();
+            //设置position为当前写位置
+            int position = commitLog.commitLogWritePosition.get();
+            byteBuffer.position(position);
+            byteBuffer.put(lengthArray);
+            byteBuffer.put(queueName.getBytes());
+            byteBuffer.put(message);
+            //移动写指针
+            commitLog.commitLogWritePosition.addAndGet(queueNameLength + messageLength + 2);
+            //强制刷盘，防止内存溢出
+            //TODO 不要实时刷盘
+            //BUG 实时刷盘会卡死
+//        commitLog.mappedByteBuffer.force();
 
-        ByteBuffer byteBuffer = commitLog.mappedByteBuffer.slice();
-        //设置position为当前写位置
-        int position = commitLog.commitLogWritePosition.get();
-        byteBuffer.position(position);
-        byteBuffer.put(lengthArray);
-        byteBuffer.put(queueName.getBytes());
-        byteBuffer.put(message);
-        //移动写指针
-        commitLog.commitLogWritePosition.addAndGet(queueNameLength + messageLength + 2);
-        //强制刷盘，防止内存溢出
-        //TODO 不要实时刷盘
-        //BUG 实时刷盘会卡死
-        commitLog.mappedByteBuffer.force();
+            //建立索引
+            Index index = indexMap.get(queueName);
+            ByteBuffer slice = index.mappedByteBuffer.slice();
+            slice.position(index.IndexWrotePosition.get());
+            slice.putInt(position);
+            index.IndexWrotePosition.addAndGet(4);
+            //TODO 不要实时刷盘
+            //BUG 实时刷盘会卡死
+//        index.mappedByteBuffer.force();
+        }
 
-        //建立索引
-        Index index = indexMap.get(queueName);
-        ByteBuffer slice = index.mappedByteBuffer.slice();
-        slice.position(index.IndexWrotePosition.get());
-        slice.putInt(position);
-        index.IndexWrotePosition.addAndGet(4);
-        //TODO 不要实时刷盘
-        //BUG 实时刷盘会卡死
-        index.mappedByteBuffer.force();
     }
 
     /**
@@ -99,7 +101,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
      * @param num       代表读取的消息的条数，如果消息足够，则返回num条，否则只返回已有的消息即可;没有消息了，则返回一个空的集合
      */
     @Override
-    public synchronized Collection<byte[]> get(String queueName, long offset, long num) {
+    public Collection<byte[]> get(String queueName, long offset, long num) {
 
         List<byte[]> list = new ArrayList<>();
         if (!indexMap.containsKey(queueName)) {
@@ -108,9 +110,10 @@ public class DefaultQueueStoreImpl extends QueueStore {
 
         Index index = indexMap.get(queueName);
 
-        ByteBuffer indexByteBuffer = index.mappedByteBuffer;
+        // slice 独立管理读写指针所以不需要加锁
+        ByteBuffer indexByteBuffer = index.mappedByteBuffer.slice();
         int commitLogNo = queueNameQueueNoMap.get(queueName) % CommitLog.commitLogNum;
-        ByteBuffer commitLog = commitLogMap.get(commitLogNo).mappedByteBuffer;
+        ByteBuffer commitLog = commitLogMap.get(commitLogNo).mappedByteBuffer.slice();
 
         for (long i = 0; i < num; i++) {
             indexByteBuffer.position((int) ((offset + i) * 4));
