@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-    public static final String dir = "/Users/kirito/data/";
-//    public static final String dir = "/alidata1/race2018/data/";
+//    public static final String dir = "/Users/kirito/data/";
+    public static final String dir = "/alidata1/race2018/data/";
 
     //存储 queue 的索引文件
     Map<String, Index> indexMap = new ConcurrentHashMap<>();
