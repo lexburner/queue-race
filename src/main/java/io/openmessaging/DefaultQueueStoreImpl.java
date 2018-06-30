@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-    public static final String dir = "/Users/kirito/data/";
-//    public static final String dir = "/alidata1/race2018/data/";
+//    public static final String dir = "/Users/kirito/data/";
+    public static final String dir = "/alidata1/race2018/data/";
 
     //存储 queue 的索引文件
     Map<String, Index> indexMap = new ConcurrentHashMap<>();
@@ -74,6 +74,12 @@ public class DefaultQueueStoreImpl extends QueueStore {
             commitLog.appendMessage(lengthArray);
             commitLog.appendMessage(queueName.getBytes());
             commitLog.appendMessage(message);
+
+//            ByteBuffer byteBuffer = commitLog.mappedByteBuffer.slice();
+//            byteBuffer.position(position);
+//            byteBuffer.put(lengthArray);
+//            byteBuffer.put(queueName.getBytes());
+//            byteBuffer.put(message);
 
             //移动写指针
             commitLog.wrotePosition.addAndGet(queueNameLength + messageLength + 2);
