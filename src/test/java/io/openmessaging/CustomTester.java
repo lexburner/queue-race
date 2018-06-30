@@ -7,29 +7,29 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-//这是评测程序的一个demo版本，其评测逻辑与实际评测程序基本类似，但是比实际评测简单很多
-//该评测程序主要便于选手在本地优化和调试自己的程序
-
-public class DemoTester {
-
+/**
+ * @author 徐靖峰
+ * Date 2018-06-29
+ */
+public class CustomTester {
     public static void main(String args[]) throws Exception {
         //评测相关配置
         //发送阶段的发送数量，也即发送阶段必须要在规定时间内把这些消息发送完毕方可
-        int msgNum  = 10000000;
+        int msgNum  = 2000000000;
         //发送阶段的最大持续时间，也即在该时间内，如果消息依然没有发送完毕，则退出评测
-        int sendTime = 10 * 60 * 1000;
+        int sendTime = 30 * 60 * 1000;
         //消费阶段的最大持续时间，也即在该时间内，如果消息依然没有消费完毕，则退出评测
-        int checkTime = 10 * 60 * 1000;
+        int checkTime = 30 * 60 * 1000;
         //队列的数量
         int queueNum = 1000;
         //正确性检测的次数
         int checkNum = 1000;
         //消费阶段的总队列数量
-        int checkQueueNum = 100;
+        int checkQueueNum = 200000;
         //发送的线程数量
-        int sendTsNum = 10;
+        int sendTsNum = 30;
         //消费的线程数量
-        int checkTsNum = 10;
+        int checkTsNum = 30;
 
         ConcurrentMap<String, AtomicInteger> queueNumMap = new ConcurrentHashMap<>();
         for (int i = 0; i < queueNum; i++) {
@@ -117,7 +117,7 @@ public class DemoTester {
         private QueueStore queueStore;
         private int number;
         private long maxTimeStamp;
-        public Producer(QueueStore queueStore, int number, long maxTimeStamp, long maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
+        public Producer(QueueStore queueStore, int number, long maxTimeStamp, int maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
             this.counter = counter;
             this.maxMsgNum = maxMsgNum;
             this.queueCounter = queueCounter;
@@ -151,7 +151,7 @@ public class DemoTester {
         private long maxTimeStamp;
         private int number;
         private ConcurrentMap<String, AtomicInteger> queueCounter;
-        public IndexChecker(QueueStore queueStore, int number, long maxTimeStamp, long maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
+        public IndexChecker(QueueStore queueStore, int number, long maxTimeStamp, int maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
             this.counter = counter;
             this.maxMsgNum = maxMsgNum;
             this.queueStore = queueStore;

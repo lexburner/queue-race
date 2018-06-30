@@ -4,12 +4,14 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author 徐靖峰
@@ -112,11 +114,12 @@ public class MmapTest {
 
     /**
      * 测试mmap写100个文件
+     *
      * @throws Exception
      */
     @Test
     public void test4() throws Exception {
-        String dir = "/Users/kirito/alibaba/data/";
+        String dir = "/Users/kirito/data/";
         ensureDirOK(dir);
 
         int n = 100;
@@ -130,7 +133,7 @@ public class MmapTest {
                     RandomAccessFile memoryMappedFile = null;
                     try {
                         memoryMappedFile = new RandomAccessFile(dir + "test" + no + ".txt", "rw");
-                        long fileSize = _1G;
+                        long fileSize = _1M;
 
                         Random random = new Random();
 
@@ -158,12 +161,13 @@ public class MmapTest {
     }
 
     /**
-     * 测试写入一个大文件
+     * 测试MappedByteBuffer写入一个大文件
+     *
      * @throws Exception
      */
     @Test
     public void test5() throws Exception {
-        String dir = "/Users/kirito/alibaba/data/";
+        String dir = "/Users/kirito/data/";
         ensureDirOK(dir);
 
         int n = 100;
@@ -202,6 +206,67 @@ public class MmapTest {
             });
         }
         countDownLatch.await();
+    }
+
+    /**
+     * 测试 fileChannel 写入
+     *
+     * @throws Exception
+     */
+    @Test
+    public void test6() throws Exception {
+        String dir = "/Users/kirito/data/";
+        ensureDirOK(dir);
+
+        int n = 100;
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        CountDownLatch countDownLatch = new CountDownLatch(n);
+        for (int i = 0; i < n; i++) {
+            final int no = i;
+            executorService.execute(new Runnable() {
+                @Override
+                public void run() {
+                    RandomAccessFile memoryMappedFile = null;
+                    try {
+                        memoryMappedFile = new RandomAccessFile(dir + "test" + no + ".txt", "rw");
+                        long fileSize = _1G;
+
+                        AtomicInteger wrotePosition = new AtomicInteger(0);
+
+                        Random random = new Random();
+
+                        FileChannel channel = memoryMappedFile.getChannel();
+
+                        while (true) {
+                            byte[] readyToWrite = quotes[random.nextInt(quotes.length)].getBytes();
+                            if (4 + readyToWrite.length + wrotePosition.get() > fileSize) {
+                                break;
+                            }
+                            ByteBuffer lengthByteBuffer = ByteBuffer.allocate(4).putInt(readyToWrite.length);
+                            lengthByteBuffer.flip();
+                            channel.write(lengthByteBuffer,wrotePosition.get());
+                            ByteBuffer readyToWriteByteBuffer = ByteBuffer.allocate(readyToWrite.length).put(readyToWrite);
+                            readyToWriteByteBuffer.flip();
+                            channel.write(readyToWriteByteBuffer,wrotePosition.get()+4);
+                            wrotePosition.addAndGet(4 + readyToWrite.length);
+                        }
+                        channel.force(false);
+                        memoryMappedFile.close();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        countDownLatch.await();
+    }
+
+
+    @Test
+    public void test7() throws Exception {
+        FileChannel fileChannel = new RandomAccessFile(new File(DefaultQueueStoreImpl.dir + 2 + ".data"), "rw").getChannel();
+        fileChannel.write(ByteBuffer.wrap("123".getBytes()));
     }
 
 
