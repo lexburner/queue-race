@@ -19,7 +19,7 @@ public class CommitLog {
 
     private final FileChannel fileChannel;
 
-    public static final int commitLogNum = 20;
+    public static final int commitLogNum = 10;
     // 单个commitLog大小
     public static final int commitLogSize = 1 * 1024 * 1024 * 1024;
     // 写入指针的位置

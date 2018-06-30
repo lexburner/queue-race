@@ -39,24 +39,29 @@ public class DefaultQueueStoreImpl extends QueueStore {
      */
     @Override
     public void put(String queueName, byte[] message) {
-        Integer queueNo = queueNameQueueNoMap.get(queueName);
-        if (queueNo==null) {
-            queueNo = queueCnt.incrementAndGet();
-            // 新建index
-            indexMap.put(queueName, new Index(queueName));
-            // 存放queueName和queueNo的关联
-            queueNameQueueNoMap.put(queueName, queueNo);
-        }
-        Integer commitLogId = queueNo % CommitLog.commitLogNum;
-        CommitLog commitLog = commitLogMap.get(commitLogId);
-        if (commitLog == null) {
-            CommitLog newCommitLog = new CommitLog(commitLogId);
-            //新建 commitLog
-            commitLogMap.put(commitLogId, newCommitLog);
-            commitLog = newCommitLog;
+        CommitLog commitLog;
+        // TODO 锁 queue
+        synchronized (this) {
+            Integer queueNo = queueNameQueueNoMap.get(queueName);
+            if (queueNo == null) {
+                queueNo = queueCnt.incrementAndGet();
+                // 新建index
+                indexMap.put(queueName, new Index(queueName));
+                // 存放queueName和queueNo的关联
+                queueNameQueueNoMap.put(queueName, queueNo);
+            }
+            Integer commitLogId = queueNo % CommitLog.commitLogNum;
+            commitLog = commitLogMap.get(commitLogId);
+            if (commitLog == null) {
+                CommitLog newCommitLog = new CommitLog(commitLogId);
+                //新建 commitLog
+                commitLogMap.put(commitLogId, newCommitLog);
+                commitLog = newCommitLog;
+            }
         }
 
-        synchronized(commitLog){
+        // 锁的粒度是 commitLog 因为多个 queue 可能对应同一个 commitLog
+        synchronized (commitLog) {
             int queueNameLength = queueName.getBytes().length;
             int messageLength = message.length;
 
@@ -64,26 +69,15 @@ public class DefaultQueueStoreImpl extends QueueStore {
             lengthArray[0] = (byte) (queueNameLength & 0xFF);
             lengthArray[1] = (byte) (messageLength & 0xFF);
 
-//            int position = commitLog.wrotePosition.get();
-//
-//            commitLog.appendMessage(lengthArray);
-//            commitLog.appendMessage(queueName.getBytes());
-//            commitLog.appendMessage(message);
-
-            ByteBuffer byteBuffer = commitLog.mappedByteBuffer.slice();
-            //设置position为当前写位置
             int position = commitLog.wrotePosition.get();
-            byteBuffer.position(position);
-            byteBuffer.put(lengthArray);
-            byteBuffer.put(queueName.getBytes());
-            byteBuffer.put(message);
+
+            commitLog.appendMessage(lengthArray);
+            commitLog.appendMessage(queueName.getBytes());
+            commitLog.appendMessage(message);
 
             //移动写指针
             commitLog.wrotePosition.addAndGet(queueNameLength + messageLength + 2);
-            //强制刷盘，防止内存溢出
-            //TODO 不要实时刷盘
-            //BUG 实时刷盘会卡死
-//        commitLog.mappedByteBuffer.force();
+            //TODO 需要定时或定量刷盘防止内存溢出
 
             //建立索引
             Index index = indexMap.get(queueName);
@@ -91,8 +85,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
             slice.position(index.IndexWrotePosition.get());
             slice.putInt(position);
             index.IndexWrotePosition.addAndGet(4);
-            //TODO 不要实时刷盘
-            //BUG 实时刷盘会卡死
+            //TODO 需要定时或定量刷盘防止内存溢出
 //        index.mappedByteBuffer.force();
         }
 
@@ -108,7 +101,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
      * @param num       代表读取的消息的条数，如果消息足够，则返回num条，否则只返回已有的消息即可;没有消息了，则返回一个空的集合
      */
     @Override
-    public synchronized Collection<byte[]>  get(String queueName, long offset, long num) {
+    public synchronized Collection<byte[]> get(String queueName, long offset, long num) {
 
         List<byte[]> list = new ArrayList<>();
         if (!indexMap.containsKey(queueName)) {
