@@ -170,7 +170,7 @@ public class MmapTest {
         String dir = "/Users/kirito/data/";
         ensureDirOK(dir);
 
-        int n = 100;
+        int n = 20;
         ExecutorService executorService = Executors.newFixedThreadPool(4);
         CountDownLatch countDownLatch = new CountDownLatch(n);
         for (int i = 0; i < n; i++) {
@@ -244,11 +244,64 @@ public class MmapTest {
                             }
                             ByteBuffer lengthByteBuffer = ByteBuffer.allocate(4).putInt(readyToWrite.length);
                             lengthByteBuffer.flip();
-                            channel.write(lengthByteBuffer,wrotePosition.get());
+                            channel.write(lengthByteBuffer, wrotePosition.get());
                             ByteBuffer readyToWriteByteBuffer = ByteBuffer.allocate(readyToWrite.length).put(readyToWrite);
                             readyToWriteByteBuffer.flip();
-                            channel.write(readyToWriteByteBuffer,wrotePosition.get()+4);
+                            channel.write(readyToWriteByteBuffer, wrotePosition.get() + 4);
                             wrotePosition.addAndGet(4 + readyToWrite.length);
+                        }
+                        channel.force(false);
+                        memoryMappedFile.close();
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        countDownLatch.await();
+    }
+
+    /**
+     * 测试4k数据量的写入
+     *
+     * @throws Exception
+     */
+    @Test
+    public void test7() throws Exception {
+        String dir = "/Users/kirito/data/";
+        ensureDirOK(dir);
+
+        byte[] _4K = new byte[4 * 1024];
+        for (int i = 0; i < _4K.length; i++) {
+            _4K[i] = 'a';
+        }
+
+        int n = 20;
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        CountDownLatch countDownLatch = new CountDownLatch(n);
+        for (int i = 0; i < n; i++) {
+            final int no = i;
+            executorService.execute(new Runnable() {
+                @Override
+                public void run() {
+                    RandomAccessFile memoryMappedFile = null;
+                    try {
+                        memoryMappedFile = new RandomAccessFile(dir + "test" + no + ".txt", "rw");
+                        long fileSize = _1G;
+
+                        AtomicInteger wrotePosition = new AtomicInteger(0);
+
+                        Random random = new Random();
+
+                        FileChannel channel = memoryMappedFile.getChannel();
+
+                        while (true) {
+                            if (wrotePosition.get() + _4K.length > fileSize) {
+                                break;
+                            }
+                            channel.write(ByteBuffer.wrap(_4K));
+                            wrotePosition.addAndGet(_4K.length);
                         }
                         channel.force(false);
                         memoryMappedFile.close();
@@ -264,10 +317,48 @@ public class MmapTest {
 
 
     @Test
-    public void test7() throws Exception {
-        FileChannel fileChannel = new RandomAccessFile(new File(DefaultQueueStoreImpl.dir + 2 + ".data"), "rw").getChannel();
-        fileChannel.write(ByteBuffer.wrap("123".getBytes()));
+    public void test8() throws Exception {
+        String dir = "/Users/kirito/data/";
+        ensureDirOK(dir);
+        RandomAccessFile memoryMappedFile = null;
+        try {
+            memoryMappedFile = new RandomAccessFile(dir + "test.txt", "rw");
+            long fileSize = _1K;
+
+            AtomicInteger wrotePosition = new AtomicInteger(0);
+
+            MappedByteBuffer out = memoryMappedFile.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, fileSize);
+            int a = 0;
+            while (true) {
+
+                if (wrotePosition.get() + 4 > fileSize) {
+                    break;
+                }
+                out.putInt(a++);
+                wrotePosition.addAndGet(4);
+            }
+            out.force();
+            memoryMappedFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-
+    @Test
+    public void test9() throws Exception {
+        String dir = "/Users/kirito/data/";
+        ensureDirOK(dir);
+        RandomAccessFile memoryMappedFile = null;
+        try {
+            memoryMappedFile = new RandomAccessFile(dir + "test.txt", "rw");
+            long fileSize = _1K;
+            MappedByteBuffer out = memoryMappedFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 8, fileSize);
+            out.position(8);
+            int value = out.getInt();
+            System.out.println(value);
+            memoryMappedFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
 }

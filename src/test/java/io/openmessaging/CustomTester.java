@@ -171,6 +171,7 @@ public class CustomTester {
                     Collection<byte[]> msgs = queueStore.get(queueName, index, 10);
                     for (byte[] msg : msgs) {
                         if (!new String(msg).equals(String.valueOf(index++))) {
+                            System.out.println(new String(msg)+"==="+ index);
                             System.out.println("Check error");
                             System.exit(-1);
                         }
@@ -214,6 +215,7 @@ public class CustomTester {
                             pullOffsets.get(queueName).getAndAdd(msgs.size());
                             for (byte[] msg : msgs) {
                                 if (!new String(msg).equals(String.valueOf(index++))) {
+                                    System.out.println(new String(msg)+"==="+ index);
                                     System.out.println("Check error");
                                     System.exit(-1);
                                 }

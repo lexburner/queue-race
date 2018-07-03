@@ -14,15 +14,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-//    public static final String dir = "/Users/kirito/data/";
-    public static final String dir = "/alidata1/race2018/data/";
+    public static final String dir = "/Users/kirito/data/";
+//    public static final String dir = "/alidata1/race2018/data/";
 
     //存储 queue 的索引文件
     Map<String, Index> indexMap = new ConcurrentHashMap<>();
     //存储 queueName 和 queue 编号 的映射关系
     Map<String, Integer> queueNameQueueNoMap = new ConcurrentHashMap<>();
     //存储 (queueNo % CommitLog.commitLogNum) 对应的实际 commitLog
-    Map<Integer, CommitLog> commitLogMap = new ConcurrentHashMap<>();
+    public Map<Integer, CommitLog> commitLogMap = new ConcurrentHashMap<>();
     //queue计数器
     AtomicInteger queueCnt = new AtomicInteger(0);
 
@@ -71,18 +71,14 @@ public class DefaultQueueStoreImpl extends QueueStore {
 
             int position = commitLog.wrotePosition.get();
 
-            commitLog.appendMessage(lengthArray);
-            commitLog.appendMessage(queueName.getBytes());
-            commitLog.appendMessage(message);
+            byte[] composeMessage = new byte[queueNameLength + messageLength + 2];
 
-//            ByteBuffer byteBuffer = commitLog.mappedByteBuffer.slice();
-//            byteBuffer.position(position);
-//            byteBuffer.put(lengthArray);
-//            byteBuffer.put(queueName.getBytes());
-//            byteBuffer.put(message);
+            System.arraycopy(lengthArray, 0, composeMessage, 0, lengthArray.length);
+            System.arraycopy(queueName.getBytes(), 0, composeMessage, lengthArray.length, queueName.getBytes().length);
+            System.arraycopy(message, 0, composeMessage, lengthArray.length + queueName.getBytes().length, message.length);
 
-            //移动写指针
-            commitLog.wrotePosition.addAndGet(queueNameLength + messageLength + 2);
+            commitLog.appendMessage(composeMessage);
+
             //TODO 需要定时或定量刷盘防止内存溢出
 
             //建立索引
@@ -92,7 +88,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
             slice.putInt(position);
             index.IndexWrotePosition.addAndGet(4);
             //TODO 需要定时或定量刷盘防止内存溢出
-//        index.mappedByteBuffer.force();
+//        index.writeBuffer.force();
         }
 
     }
@@ -107,7 +103,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
      * @param num       代表读取的消息的条数，如果消息足够，则返回num条，否则只返回已有的消息即可;没有消息了，则返回一个空的集合
      */
     @Override
-    public synchronized Collection<byte[]> get(String queueName, long offset, long num) {
+    public Collection<byte[]> get(String queueName, long offset, long num) {
 
         List<byte[]> list = new ArrayList<>();
         if (!indexMap.containsKey(queueName)) {
@@ -119,7 +115,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
         // slice 独立管理读写指针所以不需要加锁
         ByteBuffer indexByteBuffer = index.mappedByteBuffer.slice();
         int commitLogNo = queueNameQueueNoMap.get(queueName) % CommitLog.commitLogNum;
-        ByteBuffer commitLog = commitLogMap.get(commitLogNo).mappedByteBuffer.slice();
+        CommitLog commitLog = commitLogMap.get(commitLogNo);
 
         for (long i = 0; i < num; i++) {
             indexByteBuffer.position((int) ((offset + i) * 4));
@@ -129,19 +125,19 @@ public class DefaultQueueStoreImpl extends QueueStore {
                 break;
             }
 
-            commitLog.position(pos);
-
-            byte[] lengthArray = new byte[2];
-            commitLog.get(lengthArray);
-
-            int queueNameLength = lengthArray[0];
-            int messageLength = lengthArray[1];
-
-            byte[] queueNameBytes = new byte[queueNameLength];
-            byte[] messageBytes = new byte[messageLength];
-            commitLog.get(queueNameBytes);
-            commitLog.get(messageBytes);
-            list.add(messageBytes);
+//            commitLog.position(pos);
+//
+//            byte[] lengthArray = new byte[2];
+//            commitLog.get(lengthArray);
+//
+//            int queueNameLength = lengthArray[0];
+//            int messageLength = lengthArray[1];
+//
+//            byte[] queueNameBytes = new byte[queueNameLength];
+//            byte[] messageBytes = new byte[messageLength];
+//            commitLog.get(queueNameBytes);
+//            commitLog.get(messageBytes);
+            list.add(commitLog.readMessage(pos));
         }
         return list;
     }
