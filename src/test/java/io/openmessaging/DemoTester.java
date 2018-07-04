@@ -230,7 +230,8 @@ public class DemoTester {
                         Collection<byte[]> msgs = queueStore.get(queueName, index, 10);
                         if (msgs != null && msgs.size() > 0) {
                             pullOffsets.get(queueName).getAndAdd(msgs.size());
-                            for (byte[] msg : msgs) {
+                            for (byte[] msg : msgs) {//new String(((ArrayList<byte[]>)queueStore.get("Queue-848",1000,10)).get(0))
+                                //((DefaultQueueStoreImpl) queueStore).commitLogMap.get(((DefaultQueueStoreImpl) queueStore).queueNameQueueNoMap.get("Queue-848"))
                                 if (!new String(msg).equals(String.valueOf(index++))) {
                                     System.out.println(new String(msg)+"==="+ index);
                                     System.out.println("Check error");

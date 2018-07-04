@@ -111,33 +111,26 @@ public class DefaultQueueStoreImpl extends QueueStore {
         }
 
         Index index = indexMap.get(queueName);
+        int wrotePosition = index.IndexWrotePosition.get();
 
         // slice 独立管理读写指针所以不需要加锁
         ByteBuffer indexByteBuffer = index.mappedByteBuffer.slice();
         int commitLogNo = queueNameQueueNoMap.get(queueName) % CommitLog.commitLogNum;
         CommitLog commitLog = commitLogMap.get(commitLogNo);
-
+        // 计算最大的可读数据量
+        // 一个索引占 4 字节
+        num = Math.min((wrotePosition / 4) - offset, num);
         for (long i = 0; i < num; i++) {
             indexByteBuffer.position((int) ((offset + i) * 4));
             int pos = indexByteBuffer.getInt();
-
             if (pos == Integer.MAX_VALUE) {
                 break;
             }
-
-//            commitLog.position(pos);
-//
-//            byte[] lengthArray = new byte[2];
-//            commitLog.get(lengthArray);
-//
-//            int queueNameLength = lengthArray[0];
-//            int messageLength = lengthArray[1];
-//
-//            byte[] queueNameBytes = new byte[queueNameLength];
-//            byte[] messageBytes = new byte[messageLength];
-//            commitLog.get(queueNameBytes);
-//            commitLog.get(messageBytes);
-            list.add(commitLog.readMessage(pos));
+            byte[] bytes = commitLog.readMessage(pos);
+            if (bytes == null) {
+                break;
+            }
+            list.add(bytes);
         }
         return list;
     }

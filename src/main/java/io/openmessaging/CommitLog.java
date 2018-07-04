@@ -24,8 +24,8 @@ public class CommitLog {
     public static final int commitLogNum = 20;
 
     // commitLog 单个段的大小
-//    public static final int segmentSize = (int) (1.5 * 1024 * 1024 * 1024);
-    public static final int segmentSize = (int) (10 * 1024 * 1024);
+    public static final int segmentSize = (int) (1.5 * 1024 * 1024 * 1024);
+//    public static final int segmentSize = (int) (10 * 1024 * 1024);
     // 当前 commitLog 段的数量
     public int segmentNum;
     // 写入指针的位置
@@ -89,7 +89,7 @@ public class CommitLog {
         }
         try {
             if (slice == null) {
-                System.out.println("找不到block！！！");
+                return null;
             }
             slice.position(position);
 

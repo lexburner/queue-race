@@ -170,7 +170,7 @@ public class MmapTest {
         String dir = "/Users/kirito/data/";
         ensureDirOK(dir);
 
-        int n = 20;
+        int n = 200;
         ExecutorService executorService = Executors.newFixedThreadPool(4);
         CountDownLatch countDownLatch = new CountDownLatch(n);
         for (int i = 0; i < n; i++) {
@@ -196,7 +196,8 @@ public class MmapTest {
                                 break;
                             }
                         }
-                        out.force();
+                        //有本事去掉这个
+//                        out.force();
                         memoryMappedFile.close();
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -349,16 +350,39 @@ public class MmapTest {
         String dir = "/Users/kirito/data/";
         ensureDirOK(dir);
         RandomAccessFile memoryMappedFile = null;
+        int size = 4 * 100000;
         try {
-            memoryMappedFile = new RandomAccessFile(dir + "test.txt", "rw");
-            long fileSize = _1K;
-            MappedByteBuffer out = memoryMappedFile.getChannel().map(FileChannel.MapMode.READ_ONLY, 8, fileSize);
-            out.position(8);
-            int value = out.getInt();
-            System.out.println(value);
+            memoryMappedFile = new RandomAccessFile(dir + "intTest.txt", "rw");
+            MappedByteBuffer out = memoryMappedFile.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, size);
+            for (int i = 0; i < 100000 -1; i++) {
+                out.position(i * 4);
+                out.putInt(i);
+            }
+            out.force();
             memoryMappedFile.close();
         } catch (Exception e) {
             e.printStackTrace();
         }
     }
+
+    @Test
+    public void test10() throws Exception {
+        String dir = "/Users/kirito/data/";
+        ensureDirOK(dir);
+        RandomAccessFile memoryMappedFile = null;
+        int size = 4 * 100000;
+        try {
+            memoryMappedFile = new RandomAccessFile(dir + "intTest.txt", "rw");
+            MappedByteBuffer out = memoryMappedFile.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, size);
+            for (int i = 0; i < 100000; i++) {
+                out.position(i * 4);
+                int anInt = out.getInt();
+                System.out.println(anInt);
+            }
+            memoryMappedFile.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 }

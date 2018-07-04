@@ -21,16 +21,12 @@ public class Index {
     public Index(String queueName) {
         MappedByteBuffer mappedByteBuffer = null;
         try {
-            FileChannel fileChannel = new RandomAccessFile(new File(DefaultQueueStoreImpl.dir + queueName +".index"), "rw").getChannel();  //初始化fileChannel
+            FileChannel fileChannel = new RandomAccessFile(new File(DefaultQueueStoreImpl.dir + queueName + ".index"), "rw").getChannel();  //初始化fileChannel
             mappedByteBuffer = fileChannel.map(FileChannel.MapMode.READ_WRITE, 0, 4 * 40000); //初始化mappedByteBuffer  对得到的缓冲区的更改最终将写入文件；
-            ByteBuffer byteBuffer = mappedByteBuffer.slice();
-            for (int i = 0; i < 40000; i++) {
-                byteBuffer.position(i * 4);
-                byteBuffer.putInt(Integer.MAX_VALUE);
-            }
             this.mappedByteBuffer = mappedByteBuffer;
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
+
 }
