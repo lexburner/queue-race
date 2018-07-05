@@ -7,31 +7,21 @@ import java.nio.MappedByteBuffer;
  * Date 2018-07-02
  */
 public class Block {
-    private MappedByteBuffer mappedByteBuffer;
-    private long startPosition;
-    private long endPosition;
 
-    public MappedByteBuffer getMappedByteBuffer() {
-        return mappedByteBuffer;
-    }
+    /**
+     * messageSize 随 block 写入递增
+     * messageLength 随 block 写入递增
+     * offset 落盘时确定
+     * queueIndex 初始化时设置
+     */
 
-    public void setMappedByteBuffer(MappedByteBuffer mappedByteBuffer) {
-        this.mappedByteBuffer = mappedByteBuffer;
-    }
+    // 记录该块有多少个消息
+    public int messageSize = 0;
+    // 消息具体的长度
+    public int messageLength = 0;
+    // 记录该块在物理文件中的起始偏移量
+    public long offset;
+    // 记录该块中第一个消息的起始消息编号
+    public int queueIndex;
 
-    public long getStartPosition() {
-        return startPosition;
-    }
-
-    public void setStartPosition(long startPosition) {
-        this.startPosition = startPosition;
-    }
-
-    public long getEndPosition() {
-        return endPosition;
-    }
-
-    public void setEndPosition(long endPosition) {
-        this.endPosition = endPosition;
-    }
 }

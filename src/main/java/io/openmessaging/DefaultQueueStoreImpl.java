@@ -1,12 +1,13 @@
 package io.openmessaging;
 
-import java.nio.ByteBuffer;
+import java.io.FileNotFoundException;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 这是一个简单的基于内存的实现，以方便选手理解题意；
@@ -17,18 +18,23 @@ public class DefaultQueueStoreImpl extends QueueStore {
     public static final String dir = "/Users/kirito/data/";
 //    public static final String dir = "/alidata1/race2018/data/";
 
-    //存储 queue 的索引文件
-    IndexManager indexManager = new IndexManager();
-    //存储 queueName 和 queue 编号 的映射关系
-    Map<String, Integer> queueNameQueueNoMap = new ConcurrentHashMap<>();
-    //存储 (queueNo % CommitLog.commitLogNum) 对应的实际 commitLog
-    public Map<Integer, CommitLog> commitLogMap = new ConcurrentHashMap<>();
-    //queue计数器
-    AtomicInteger queueCnt = new AtomicInteger(0);
-    // queue lock
-    public static Map<String, Object> queueLocks = new ConcurrentHashMap<>();
+    public Map<String, Queue> queueMap = new ConcurrentHashMap<>();
 
     public static Collection<byte[]> EMPTY = new ArrayList<>();
+
+    private FileChannel channel;
+    private AtomicLong wrotePosition;
+
+    public DefaultQueueStoreImpl() {
+        RandomAccessFile memoryMappedFile = null;
+        try {
+            memoryMappedFile = new RandomAccessFile(dir + "all.data", "rw");
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+        this.channel = memoryMappedFile.getChannel();
+        this.wrotePosition = new AtomicLong(0L);
+    }
 
 
     /**
@@ -42,58 +48,17 @@ public class DefaultQueueStoreImpl extends QueueStore {
      */
     @Override
     public void put(String queueName, byte[] message) {
-        CommitLog commitLog;
-        // TODO 测试并发问题
-        Object lock;
-        synchronized (this){
-            lock = queueLocks.get(queueName);
-            if(lock == null){
-                lock = new Object();
-                queueLocks.put(queueName, lock);
-            }
-        }
-        synchronized (lock) {
-            Integer queueNo = queueNameQueueNoMap.get(queueName);
-            if (queueNo == null) {
-                queueNo = queueCnt.incrementAndGet();
-                // 存放queueName和queueNo的关联
-                queueNameQueueNoMap.put(queueName, queueNo);
-            }
-            Integer commitLogId = queueNo % CommitLog.commitLogNum;
-            commitLog = commitLogMap.get(commitLogId);
-            if (commitLog == null) {
-                CommitLog newCommitLog = new CommitLog(commitLogId);
-                //新建 commitLog
-                commitLogMap.put(commitLogId, newCommitLog);
-                commitLog = newCommitLog;
+        Queue queue;
+        synchronized (this) {
+            queue = queueMap.get(queueName);
+            if (queue == null) {
+                queue = new Queue(channel, wrotePosition);
+                queueMap.put(queueName, queue);
             }
         }
 
         // 锁的粒度是 commitLog 因为多个 queue 可能对应同一个 commitLog
-        synchronized (commitLog) {
-            int queueNameLength = queueName.getBytes().length;
-            int messageLength = message.length;
-
-            byte[] lengthArray = new byte[2];
-            lengthArray[0] = (byte) (queueNameLength & 0xFF);
-            lengthArray[1] = (byte) (messageLength & 0xFF);
-
-            long position = commitLog.wrotePosition.get();
-
-            byte[] composeMessage = new byte[queueNameLength + messageLength + 2];
-
-            System.arraycopy(lengthArray, 0, composeMessage, 0, lengthArray.length);
-            System.arraycopy(queueName.getBytes(), 0, composeMessage, lengthArray.length, queueName.getBytes().length);
-            System.arraycopy(message, 0, composeMessage, lengthArray.length + queueName.getBytes().length, message.length);
-
-            commitLog.appendMessage(composeMessage);
-
-            //TODO 需要定时或定量刷盘防止内存溢出
-
-            //建立索引
-            indexManager.addIndex(queueName,position);
-            //TODO 需要定时或定量刷盘防止内存溢出
-        }
+        queue.put(message);
 
     }
 
@@ -108,25 +73,11 @@ public class DefaultQueueStoreImpl extends QueueStore {
      */
     @Override
     public Collection<byte[]> get(String queueName, long offset, long num) {
-
-        List<byte[]> list = new ArrayList<>();
-        List<Long> index = indexManager.getIndex(queueName, offset, num);
-        if(index==null || index.size()==0){
+        Queue queue = queueMap.get(queueName);
+        if (queue == null) {
             return EMPTY;
         }
-        // slice 独立管理读写指针所以不需要加锁
-        int commitLogNo = queueNameQueueNoMap.get(queueName) % CommitLog.commitLogNum;
-        CommitLog commitLog = commitLogMap.get(commitLogNo);
-        // 一个索引占 4 字节
-        for (int i = 0; i < index.size(); i++) {
-            long pos = index.get(i);
-            byte[] bytes = commitLog.readMessage(pos);
-            if (bytes == null) {
-                break;
-            }
-            list.add(bytes);
-        }
-        return list;
+        return queue.get(offset, num);
     }
 
 }

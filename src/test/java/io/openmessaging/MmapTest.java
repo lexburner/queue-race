@@ -3,6 +3,7 @@ package io.openmessaging;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
@@ -354,7 +355,7 @@ public class MmapTest {
         try {
             memoryMappedFile = new RandomAccessFile(dir + "intTest.txt", "rw");
             MappedByteBuffer out = memoryMappedFile.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, size);
-            for (int i = 0; i < 100000 -1; i++) {
+            for (int i = 0; i < 100000 - 1; i++) {
                 out.position(i * 4);
                 out.putInt(i);
             }
@@ -386,9 +387,109 @@ public class MmapTest {
     }
 
     @Test
-    public void test11(){
+    public void test11() {
         System.out.println(Integer.MAX_VALUE);
         System.out.println(Long.MAX_VALUE);
+    }
+
+    public static final int _4K = 4 * 1024;
+
+    @Test
+    public void test12() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile memoryMappedFile = new RandomAccessFile(dir + "testBuffer.txt", "rw");
+        FileChannel channel = memoryMappedFile.getChannel();
+        Random random = new Random();
+        ByteBuffer out = ByteBuffer.allocateDirect(_4K);
+        long readPosition = 0;
+        long wrotePosition = 0;
+        for (int i = 0; i < 1000; i++) {
+            byte[] readyToWrite = quotes[random.nextInt(quotes.length)].getBytes();
+            if (out.remaining() > readyToWrite.length + 4) {
+                out.putInt(readyToWrite.length);
+                out.put(readyToWrite);
+                wrotePosition += readyToWrite.length + 4;
+            } else {
+                out.flip();
+                channel.write(out, readPosition);
+                readPosition = wrotePosition;
+                out.clear();
+                out.putInt(readyToWrite.length);
+                out.put(readyToWrite);
+                wrotePosition += readyToWrite.length + 4;
+            }
+        }
+
+        for (int i = 0; i < 1000; i++) {
+            if (out.position() > 0) {
+                out.flip();
+                channel.write(out, readPosition);
+                readPosition = wrotePosition;
+                out.clear();
+            }
+            ByteBuffer byteBuffer = ByteBuffer.allocateDirect(4);
+            channel.read(byteBuffer);
+            byteBuffer.flip();
+            int size = byteBuffer.getInt();
+            ByteBuffer messageByteBuffer = ByteBuffer.allocateDirect(size);
+            channel.read(messageByteBuffer);
+            byte[] messageBytes = new byte[size];
+            messageByteBuffer.flip();
+            messageByteBuffer.get(messageBytes);
+            System.out.println(new String(messageBytes));
+        }
+        channel.close();
+        memoryMappedFile.close();
+    }
+
+    /**
+     * 测试并发写
+     *
+     * @throws Exception
+     */
+    @Test
+    public void test13() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile memoryMappedFile = new RandomAccessFile(dir + "all.data", "rw");
+        FileChannel channel = memoryMappedFile.getChannel();
+        CountDownLatch countDownLatch = new CountDownLatch(100);
+        for (int i = 0; i < 100; i++) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        channel.write(ByteBuffer.wrap("hello world!".getBytes()));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    countDownLatch.countDown();
+                }
+            }).start();
+        }
+        countDownLatch.await();
+        channel.close();
+        memoryMappedFile.close();
+    }
+
+    @Test
+    public void test14() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile memoryMappedFile = new RandomAccessFile(dir + "all.data", "rw");
+        FileChannel channel = memoryMappedFile.getChannel();
+        for (int i = 0; i < 10000000; i++) {
+            ByteBuffer byteBuffer = ByteBuffer.allocateDirect(4);
+            channel.read(byteBuffer);
+            byteBuffer.flip();
+            int size = byteBuffer.getInt();
+            ByteBuffer messageByteBuffer = ByteBuffer.allocateDirect(size);
+            channel.read(messageByteBuffer);
+            byte[] messageBytes = new byte[size];
+            messageByteBuffer.flip();
+            messageByteBuffer.get(messageBytes);
+            System.out.println(new String(messageBytes));
+        }
+        channel.close();
+        memoryMappedFile.close();
     }
 
 }

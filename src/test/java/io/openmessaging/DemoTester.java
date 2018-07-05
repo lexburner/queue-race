@@ -1,7 +1,6 @@
 package io.openmessaging;
 
 import java.util.Collection;
-import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -187,7 +186,7 @@ public class DemoTester {
                     Collection<byte[]> msgs = queueStore.get(queueName, index, 10);
                     for (byte[] msg : msgs) {
                         if (!new String(msg).equals(String.valueOf(index++))) {
-                            System.out.println(new String(msg)+"==="+ index);
+                            System.out.println("queueName:" + queueName + " index:" + (index - 1) + " 实际获取到的msg:" + new String(msg));
                             System.out.println("Check error");
                             System.exit(-1);
                         }
@@ -233,7 +232,7 @@ public class DemoTester {
                             for (byte[] msg : msgs) {//new String(((ArrayList<byte[]>)queueStore.get("Queue-848",1000,10)).get(0))
                                 //((DefaultQueueStoreImpl) queueStore).commitLogMap.get(((DefaultQueueStoreImpl) queueStore).queueNameQueueNoMap.get("Queue-848"))
                                 if (!new String(msg).equals(String.valueOf(index++))) {
-                                    System.out.println(new String(msg)+"==="+ index);
+                                    System.out.println(new String(msg) + "===" + index);
                                     System.out.println("Check error");
                                     System.exit(-1);
                                 }
