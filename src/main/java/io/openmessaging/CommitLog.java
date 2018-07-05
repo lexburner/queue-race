@@ -10,7 +10,7 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author 徐靖峰
@@ -24,12 +24,12 @@ public class CommitLog {
     public static final int commitLogNum = 20;
 
     // commitLog 单个段的大小
-    public static final int segmentSize = (int) (1.5 * 1024 * 1024 * 1024);
-//    public static final int segmentSize = (int) (10 * 1024 * 1024);
+    public static final long segmentSize = (long) (1.5 * 1024 * 1024 * 1024);
+    //    public static final int segmentSize = (int) (10 * 1024 * 1024);
     // 当前 commitLog 段的数量
     public int segmentNum;
     // 写入指针的位置
-    public AtomicInteger wrotePosition;
+    public AtomicLong wrotePosition;
     List<Block> blocks = new ArrayList<>();
 
     public CommitLog(Integer commitLogId) {
@@ -45,11 +45,11 @@ public class CommitLog {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        wrotePosition = new AtomicInteger(0);
+        wrotePosition = new AtomicLong(0);
     }
 
     public void appendMessage(final byte[] data) {
-        int currentPos = this.wrotePosition.get();
+        long currentPos = this.wrotePosition.get();
         if ((this.wrotePosition.get() + data.length) > getCurrentBlock().getEndPosition()) {
             try {
                 // 获取上一段
@@ -70,7 +70,7 @@ public class CommitLog {
             }
         }
         ByteBuffer slice = getCurrentBlock().getMappedByteBuffer().slice();
-        slice.position(currentPos - getCurrentBlock().getStartPosition());
+        slice.position((int) (currentPos - getCurrentBlock().getStartPosition()));
         slice.put(ByteBuffer.wrap(data));
         this.wrotePosition.addAndGet(data.length);
     }
@@ -79,11 +79,13 @@ public class CommitLog {
         return this.blocks.get(segmentNum - 1);
     }
 
-    public byte[] readMessage(final int position) {
+    public byte[] readMessage(final long position) {
         ByteBuffer slice = null;
+        long startPosition = 0;
         for (Block block : blocks) {
             if (block.getStartPosition() <= position && block.getEndPosition() > position) {
                 slice = block.getMappedByteBuffer().slice();
+                startPosition = block.getStartPosition();
                 break;
             }
         }
@@ -91,7 +93,7 @@ public class CommitLog {
             if (slice == null) {
                 return null;
             }
-            slice.position(position);
+            slice.position((int) (position - startPosition));
 
             byte[] lengthArray = new byte[2];
             slice.get(lengthArray);

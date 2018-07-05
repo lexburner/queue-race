@@ -79,7 +79,7 @@ public class DemoTester {
             indexChecks[i].join();
         }
         long indexCheckEnd = System.currentTimeMillis();
-        System.out.printf("Index Check: %d ms Num:%d\n", indexCheckEnd - indexCheckStart, indexCheckCounter.get());
+        System.out.printf("IndexManager Check: %d ms Num:%d\n", indexCheckEnd - indexCheckStart, indexCheckCounter.get());
 
         //Step3: 消费消息，并验证顺序性
         long checkStart = System.currentTimeMillis();
@@ -115,9 +115,9 @@ public class DemoTester {
 //        for (CommitLog commitLog : commitLogMap.values()) {
 //            System.out.println("写指针位置：" + commitLog.wrotePosition.get() + "  segmentNum：" + commitLog.segmentNum);
 //        }
-//        Map<String, Index> indexMap = defaultQueueStore.indexMap;
-//        for (Index index : indexMap.values()) {
-//            System.out.println("队列大小：" + (index.IndexWrotePosition.get() / 4));
+//        Map<String, IndexManager> indexManager = defaultQueueStore.indexManager;
+//        for (IndexManager index : indexManager.values()) {
+//            System.out.println("队列大小：" + (index.indexWrotePosition.get() / 4));
 //        }
 
 

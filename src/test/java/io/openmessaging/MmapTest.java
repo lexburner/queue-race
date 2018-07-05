@@ -385,4 +385,10 @@ public class MmapTest {
         }
     }
 
+    @Test
+    public void test11(){
+        System.out.println(Integer.MAX_VALUE);
+        System.out.println(Long.MAX_VALUE);
+    }
+
 }

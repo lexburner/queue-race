@@ -4,9 +4,10 @@ import java.nio.MappedByteBuffer;
 
 /**
  * @author 徐靖峰
- * Date 2018-07-02
+ * Date 2018-07-04
  */
-public class Block {
+public class IndexMappedByteBufferWrapper {
+
     private MappedByteBuffer mappedByteBuffer;
     private long startPosition;
     private long endPosition;

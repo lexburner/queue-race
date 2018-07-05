@@ -18,15 +18,18 @@ public class DefaultQueueStoreImpl extends QueueStore {
 //    public static final String dir = "/alidata1/race2018/data/";
 
     //存储 queue 的索引文件
-    Map<String, Index> indexMap = new ConcurrentHashMap<>();
+    IndexManager indexManager = new IndexManager();
     //存储 queueName 和 queue 编号 的映射关系
     Map<String, Integer> queueNameQueueNoMap = new ConcurrentHashMap<>();
     //存储 (queueNo % CommitLog.commitLogNum) 对应的实际 commitLog
     public Map<Integer, CommitLog> commitLogMap = new ConcurrentHashMap<>();
     //queue计数器
     AtomicInteger queueCnt = new AtomicInteger(0);
+    // queue lock
+    public static Map<String, Object> queueLocks = new ConcurrentHashMap<>();
 
     public static Collection<byte[]> EMPTY = new ArrayList<>();
+
 
     /**
      * 把一条消息写入一个队列；
@@ -40,13 +43,19 @@ public class DefaultQueueStoreImpl extends QueueStore {
     @Override
     public void put(String queueName, byte[] message) {
         CommitLog commitLog;
-        // TODO 锁 queue
-        synchronized (this) {
+        // TODO 测试并发问题
+        Object lock;
+        synchronized (this){
+            lock = queueLocks.get(queueName);
+            if(lock == null){
+                lock = new Object();
+                queueLocks.put(queueName, lock);
+            }
+        }
+        synchronized (lock) {
             Integer queueNo = queueNameQueueNoMap.get(queueName);
             if (queueNo == null) {
                 queueNo = queueCnt.incrementAndGet();
-                // 新建index
-                indexMap.put(queueName, new Index(queueName));
                 // 存放queueName和queueNo的关联
                 queueNameQueueNoMap.put(queueName, queueNo);
             }
@@ -69,7 +78,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
             lengthArray[0] = (byte) (queueNameLength & 0xFF);
             lengthArray[1] = (byte) (messageLength & 0xFF);
 
-            int position = commitLog.wrotePosition.get();
+            long position = commitLog.wrotePosition.get();
 
             byte[] composeMessage = new byte[queueNameLength + messageLength + 2];
 
@@ -82,13 +91,8 @@ public class DefaultQueueStoreImpl extends QueueStore {
             //TODO 需要定时或定量刷盘防止内存溢出
 
             //建立索引
-            Index index = indexMap.get(queueName);
-            ByteBuffer slice = index.mappedByteBuffer.slice();
-            slice.position(index.IndexWrotePosition.get());
-            slice.putInt(position);
-            index.IndexWrotePosition.addAndGet(4);
+            indexManager.addIndex(queueName,position);
             //TODO 需要定时或定量刷盘防止内存溢出
-//        index.writeBuffer.force();
         }
 
     }
@@ -106,26 +110,16 @@ public class DefaultQueueStoreImpl extends QueueStore {
     public Collection<byte[]> get(String queueName, long offset, long num) {
 
         List<byte[]> list = new ArrayList<>();
-        if (!indexMap.containsKey(queueName)) {
+        List<Long> index = indexManager.getIndex(queueName, offset, num);
+        if(index==null || index.size()==0){
             return EMPTY;
         }
-
-        Index index = indexMap.get(queueName);
-        int wrotePosition = index.IndexWrotePosition.get();
-
         // slice 独立管理读写指针所以不需要加锁
-        ByteBuffer indexByteBuffer = index.mappedByteBuffer.slice();
         int commitLogNo = queueNameQueueNoMap.get(queueName) % CommitLog.commitLogNum;
         CommitLog commitLog = commitLogMap.get(commitLogNo);
-        // 计算最大的可读数据量
         // 一个索引占 4 字节
-        num = Math.min((wrotePosition / 4) - offset, num);
-        for (long i = 0; i < num; i++) {
-            indexByteBuffer.position((int) ((offset + i) * 4));
-            int pos = indexByteBuffer.getInt();
-            if (pos == Integer.MAX_VALUE) {
-                break;
-            }
+        for (int i = 0; i < index.size(); i++) {
+            long pos = index.get(i);
             byte[] bytes = commitLog.readMessage(pos);
             if (bytes == null) {
                 break;

@@ -78,7 +78,7 @@ public class CustomTester {
             indexChecks[i].join();
         }
         long indexCheckEnd = System.currentTimeMillis();
-        System.out.printf("Index Check: %d ms Num:%d\n", indexCheckEnd - indexCheckStart, indexCheckCounter.get());
+        System.out.printf("IndexManager Check: %d ms Num:%d\n", indexCheckEnd - indexCheckStart, indexCheckCounter.get());
 
         //Step3: 消费消息，并验证顺序性
         long checkStart = System.currentTimeMillis();
