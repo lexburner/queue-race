@@ -30,11 +30,12 @@ public class Queue {
 
     // 缓冲区大小
     public final static int bufferSize = (58 + 2) * 60;
+//    public final static int bufferSize = 4*1024;
 
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
     // 读缓冲区
-    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
+//    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
 
     private List<Block> blocks = new ArrayList<>();
     private volatile Block currentBlock;
@@ -62,7 +63,7 @@ public class Queue {
 
     private void flush() {
         writeBuffer.flip();
-        long writePosition = wrotePosition.getAndAdd(currentBlock.messageLength);
+        long writePosition = wrotePosition.getAndAdd(bufferSize);
         currentBlock.offset = writePosition;
         try {
             channel.write(writeBuffer, writePosition);
@@ -79,7 +80,7 @@ public class Queue {
 
     private void flushForGet() {
         writeBuffer.flip();
-        long writePosition = wrotePosition.getAndAdd(currentBlock.messageLength);
+        long writePosition = wrotePosition.getAndAdd(bufferSize);
         currentBlock.offset = writePosition;
         try {
             channel.write(writeBuffer, writePosition);
@@ -87,7 +88,7 @@ public class Queue {
             e.printStackTrace();
         }
         writeBuffer.clear();
-        ((DirectBuffer) writeBuffer).cleaner().clean();
+//        ((DirectBuffer) writeBuffer).cleaner().clean();
         blocks.add(currentBlock);
     }
 
@@ -98,7 +99,7 @@ public class Queue {
      * @param num
      * @return
      */
-    public Collection<byte[]> get(long offset, long num) {
+    public synchronized Collection<byte[]> get(long offset, long num) {
         if (currentBlock == null) {
             return DefaultQueueStoreImpl.EMPTY;
         }
@@ -123,8 +124,8 @@ public class Queue {
         // find startBlock
         int left = 0;
         int right = blockSize - 1;
-        startBlock = BinarySearch(blocks, startIndex, left, right);
-        endBlock = BinarySearch(blocks, endIndex, startBlock, right);
+        startBlock = binarySearch(blocks, startIndex, left, right);
+        endBlock = binarySearch(blocks, endIndex, startBlock, right);
 
         if (startBlock == -1 || endBlock == -1) {
             throw new RuntimeException("未找到对应的数据块");
@@ -132,7 +133,7 @@ public class Queue {
         List<byte[]> result = new ArrayList<>();
         for (int j = startBlock; j <= endBlock; j++) {
             Block block = blocks.get(j);
-            ByteBuffer byteBuffer = readBufferHolder.get();
+            ByteBuffer byteBuffer = writeBuffer;
             byteBuffer.clear();
             try {
                 channel.read(byteBuffer, block.offset);
@@ -152,8 +153,7 @@ public class Queue {
         return result;
     }
 
-    private int BinarySearch(List<Block> blocks, int index, int left, int right) {
-        int block = -1;
+    private int binarySearch(List<Block> blocks, int index, int left, int right) {
         while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
             int mid = left + ((right - left) >> 1);//防止溢出
             Block blockItem = blocks.get(mid);
