@@ -1,5 +1,7 @@
 package io.openmessaging;
 
+import sun.nio.ch.DirectBuffer;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -27,7 +29,8 @@ public class Queue {
     }
 
     // 缓冲区大小
-    public final static int bufferSize = (58 + 2) * 30;
+    public final static int bufferSize = (58 + 2) * 10;
+
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
     // 读缓冲区
@@ -84,7 +87,7 @@ public class Queue {
             e.printStackTrace();
         }
         writeBuffer.clear();
-        writeBuffer = null;
+        ((DirectBuffer) writeBuffer).cleaner().clean();
         blocks.add(currentBlock);
     }
 
@@ -126,8 +129,7 @@ public class Queue {
             if (blockItem.queueIndex <= startIndex && startIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {//找到了
                 startBlock = mid;
                 break;
-            }
-            else if (startIndex < blockItem.queueIndex)
+            } else if (startIndex < blockItem.queueIndex)
                 right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
             else
                 left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
@@ -139,11 +141,10 @@ public class Queue {
         while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
             int mid = left + ((right - left) >> 1);//防止溢出
             Block blockItem = blocks.get(mid);
-            if (blockItem.queueIndex <= endIndex && endIndex <= blockItem.queueIndex + blockItem.messageSize - 1){//找到了
+            if (blockItem.queueIndex <= endIndex && endIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {//找到了
                 endBlock = mid;
                 break;
-            }
-            else if (endIndex < blockItem.queueIndex)
+            } else if (endIndex < blockItem.queueIndex)
                 right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
             else
                 left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
