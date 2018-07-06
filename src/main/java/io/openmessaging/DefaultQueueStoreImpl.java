@@ -15,8 +15,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-//    public static final String dir = "/Users/kirito/data/";
-    public static final String dir = "/alidata1/race2018/data/";
+    public static final String dir = "/Users/kirito/data/";
+//    public static final String dir = "/alidata1/race2018/data/";
 
     public Map<String, Queue> queueMap = new ConcurrentHashMap<>();
 
@@ -49,11 +49,15 @@ public class DefaultQueueStoreImpl extends QueueStore {
     @Override
     public void put(String queueName, byte[] message) {
         Queue queue;
-        synchronized (this) {
-            queue = queueMap.get(queueName);
-            if (queue == null) {
-                queue = new Queue(channel, wrotePosition);
-                queueMap.put(queueName, queue);
+        queue = queueMap.get(queueName);
+        if (queue == null) {
+            synchronized (this) {
+                // 双重检测
+                queue = queueMap.get(queueName);
+                if (queue == null) {
+                    queue = new Queue(channel, wrotePosition);
+                    queueMap.put(queueName, queue);
+                }
             }
         }
 
