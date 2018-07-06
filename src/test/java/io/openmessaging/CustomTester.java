@@ -7,33 +7,29 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-//这是评测程序的一个demo版本，其评测逻辑与实际评测程序基本类似，但是比实际评测简单很多
-//该评测程序主要便于选手在本地优化和调试自己的程序
-
-public class DemoTester {
-
+/**
+ * @author 徐靖峰
+ * Date 2018-06-29
+ */
+public class CustomTester {
     public static void main(String args[]) throws Exception {
         //评测相关配置
         //发送阶段的发送数量，也即发送阶段必须要在规定时间内把这些消息发送完毕方可
-<<<<<<< HEAD
         int msgNum  = 200000000;
-=======
-        int msgNum = 10000000;
->>>>>>> 94bcc3a6d3895fae3201043e33920fa629b39b7b
         //发送阶段的最大持续时间，也即在该时间内，如果消息依然没有发送完毕，则退出评测
-        int sendTime = 10 * 60 * 1000;
+        int sendTime = 30 * 60 * 1000;
         //消费阶段的最大持续时间，也即在该时间内，如果消息依然没有消费完毕，则退出评测
-        int checkTime = 10 * 60 * 1000;
+        int checkTime = 30 * 60 * 1000;
         //队列的数量
-        int queueNum = 1000;
+        int queueNum = 200000;
         //正确性检测的次数
-        int checkNum = 1000;
+        int checkNum = 200000;
         //消费阶段的总队列数量
-        int checkQueueNum = 100;
+        int checkQueueNum = 200000;
         //发送的线程数量
-        int sendTsNum = 10;
+        int sendTsNum = 30;
         //消费的线程数量
-        int checkTsNum = 10;
+        int checkTsNum = 30;
 
         ConcurrentMap<String, AtomicInteger> queueNumMap = new ConcurrentHashMap<>();
         for (int i = 0; i < queueNum; i++) {
@@ -44,7 +40,7 @@ public class DemoTester {
 
         try {
             Class queueStoreClass = Class.forName("io.openmessaging.DefaultQueueStoreImpl");
-            queueStore = (QueueStore) queueStoreClass.newInstance();
+            queueStore = (QueueStore)queueStoreClass.newInstance();
         } catch (Throwable t) {
             t.printStackTrace();
             System.exit(-1);
@@ -90,7 +86,7 @@ public class DemoTester {
         AtomicLong checkCounter = new AtomicLong(0);
         Thread[] checks = new Thread[checkTsNum];
         for (int i = 0; i < sendTsNum; i++) {
-            int eachCheckQueueNum = checkQueueNum / checkTsNum;
+            int eachCheckQueueNum = checkQueueNum/checkTsNum;
             ConcurrentMap<String, AtomicInteger> offsets = new ConcurrentHashMap<>();
             for (int j = 0; j < eachCheckQueueNum; j++) {
                 String queueName = "Queue-" + random.nextInt(queueNum);
@@ -111,21 +107,8 @@ public class DemoTester {
         System.out.printf("Check: %d ms Num: %d\n", checkEnd - checkStart, checkCounter.get());
 
         //评测结果
-        System.out.printf("Tps:%f\n", ((sendCounter.get() + checkCounter.get() + indexCheckCounter.get()) + 0.1) * 1000 / ((sendSend - sendStart) + (checkEnd - checkStart) + (indexCheckEnd - indexCheckStart)));
-
-//        DefaultQueueStoreImpl defaultQueueStore = (DefaultQueueStoreImpl) queueStore;
-//        Map<Integer, CommitLog> commitLogMap = defaultQueueStore.commitLogMap;
-//        for (CommitLog commitLog : commitLogMap.values()) {
-//            System.out.println("写指针位置：" + commitLog.wrotePosition.get() + "  segmentNum：" + commitLog.segmentNum);
-//        }
-//        Map<String, IndexManager> indexManager = defaultQueueStore.indexManager;
-//        for (IndexManager index : indexManager.values()) {
-//            System.out.println("队列大小：" + (index.indexWrotePosition.get() / 4));
-//        }
-
-
+        System.out.printf("Tps:%f\n", ((sendCounter.get() + checkCounter.get() + indexCheckCounter.get()) + 0.1) * 1000 / ((sendSend- sendStart) + (checkEnd- checkStart) + (indexCheckEnd - indexCheckStart)));
     }
-
     static class Producer implements Runnable {
 
         private AtomicLong counter;
@@ -134,20 +117,19 @@ public class DemoTester {
         private QueueStore queueStore;
         private int number;
         private long maxTimeStamp;
-
-        public Producer(QueueStore queueStore, int number, long maxTimeStamp, long maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
+        public Producer(QueueStore queueStore, int number, long maxTimeStamp, int maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
             this.counter = counter;
             this.maxMsgNum = maxMsgNum;
             this.queueCounter = queueCounter;
             this.number = number;
             this.queueStore = queueStore;
-            this.maxTimeStamp = maxTimeStamp;
+            this.maxTimeStamp =  maxTimeStamp;
         }
 
         @Override
         public void run() {
             long count;
-            while ((count = counter.getAndIncrement()) < maxMsgNum && System.currentTimeMillis() <= maxTimeStamp) {
+            while ( (count = counter.getAndIncrement()) < maxMsgNum && System.currentTimeMillis() <= maxTimeStamp) {
                 try {
                     String queueName = "Queue-" + count % queueCounter.size();
                     synchronized (queueCounter.get(queueName)) {
@@ -169,14 +151,13 @@ public class DemoTester {
         private long maxTimeStamp;
         private int number;
         private ConcurrentMap<String, AtomicInteger> queueCounter;
-
-        public IndexChecker(QueueStore queueStore, int number, long maxTimeStamp, long maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
+        public IndexChecker(QueueStore queueStore, int number, long maxTimeStamp, int maxMsgNum, AtomicLong counter, ConcurrentMap<String, AtomicInteger> queueCounter) {
             this.counter = counter;
             this.maxMsgNum = maxMsgNum;
             this.queueStore = queueStore;
             this.number = number;
             this.queueCounter = queueCounter;
-            this.maxTimeStamp = maxTimeStamp;
+            this.maxTimeStamp =  maxTimeStamp;
         }
 
         @Override
@@ -190,7 +171,7 @@ public class DemoTester {
                     Collection<byte[]> msgs = queueStore.get(queueName, index, 10);
                     for (byte[] msg : msgs) {
                         if (!new String(msg).equals(String.valueOf(index++))) {
-                            System.out.println("queueName:" + queueName + " index:" + (index - 1) + " 实际获取到的msg:" + new String(msg));
+                            System.out.println(new String(msg)+"==="+ index);
                             System.out.println("Check error");
                             System.exit(-1);
                         }
@@ -211,19 +192,18 @@ public class DemoTester {
         private ConcurrentMap<String, AtomicInteger> offsets;
         private long maxTimeStamp;
         private int number;
-
         public Consumer(QueueStore queueStore, int number, long maxTimeStamp, AtomicLong counter, ConcurrentMap<String, AtomicInteger> offsets) {
             this.counter = counter;
             this.queueStore = queueStore;
             this.offsets = offsets;
             this.maxTimeStamp = maxTimeStamp;
-            this.number = number;
+            this.number =  number;
         }
 
         @Override
         public void run() {
             ConcurrentMap<String, AtomicInteger> pullOffsets = new ConcurrentHashMap<>();
-            for (String queueName : offsets.keySet()) {
+            for (String queueName: offsets.keySet()) {
                 pullOffsets.put(queueName, new AtomicInteger(0));
             }
             while (pullOffsets.size() > 0 && System.currentTimeMillis() <= maxTimeStamp) {
@@ -233,10 +213,9 @@ public class DemoTester {
                         Collection<byte[]> msgs = queueStore.get(queueName, index, 10);
                         if (msgs != null && msgs.size() > 0) {
                             pullOffsets.get(queueName).getAndAdd(msgs.size());
-                            for (byte[] msg : msgs) {//new String(((ArrayList<byte[]>)queueStore.get("Queue-848",1000,10)).get(0))
-                                //((DefaultQueueStoreImpl) queueStore).commitLogMap.get(((DefaultQueueStoreImpl) queueStore).queueNameQueueNoMap.get("Queue-848"))
+                            for (byte[] msg : msgs) {
                                 if (!new String(msg).equals(String.valueOf(index++))) {
-                                    System.out.println(new String(msg) + "===" + index);
+                                    System.out.println(new String(msg)+"==="+ index);
                                     System.out.println("Check error");
                                     System.exit(-1);
                                 }
