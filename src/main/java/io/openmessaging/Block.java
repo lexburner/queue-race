@@ -1,6 +1,5 @@
 package io.openmessaging;
 
-import java.nio.MappedByteBuffer;
 
 /**
  * @author 徐靖峰
