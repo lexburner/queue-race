@@ -21,19 +21,24 @@ public class DefaultQueueStoreImpl extends QueueStore {
     public Map<String, Queue> queueMap = new ConcurrentHashMap<>();
 
     public static Collection<byte[]> EMPTY = new ArrayList<>();
+    private static final int FILE_SIZE = 20;
 
-    private FileChannel channel;
-    private AtomicLong wrotePosition;
+    private FileChannel[] channels;
+    private AtomicLong[] wrotePositions;
 
     public DefaultQueueStoreImpl() {
-        RandomAccessFile memoryMappedFile = null;
-        try {
-            memoryMappedFile = new RandomAccessFile(dir + "all.data", "rw");
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
+        channels = new FileChannel[FILE_SIZE];
+        wrotePositions = new AtomicLong[FILE_SIZE];
+        for (int i = 0; i < FILE_SIZE; i++) {
+            RandomAccessFile memoryMappedFile = null;
+            try {
+                memoryMappedFile = new RandomAccessFile(dir + "all_" + i + ".data", "rw");
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            }
+            this.channels[i] = memoryMappedFile.getChannel();
+            this.wrotePositions[i] = new AtomicLong(0L);
         }
-        this.channel = memoryMappedFile.getChannel();
-        this.wrotePosition = new AtomicLong(0L);
     }
 
 
@@ -55,13 +60,13 @@ public class DefaultQueueStoreImpl extends QueueStore {
                 // 双重检测
                 queue = queueMap.get(queueName);
                 if (queue == null) {
-                    queue = new Queue(channel, wrotePosition);
+                    int index = Math.abs(queueName.hashCode()) % FILE_SIZE;
+                    queue = new Queue(channels[index], wrotePositions[index]);
                     queueMap.put(queueName, queue);
                 }
             }
         }
 
-        // 锁的粒度是 commitLog 因为多个 queue 可能对应同一个 commitLog
         queue.put(message);
 
     }

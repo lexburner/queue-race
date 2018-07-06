@@ -27,7 +27,7 @@ public class Queue {
     }
 
     // 缓冲区大小
-    public final static int bufferSize = 3 * 1024;
+    public final static int bufferSize = (58 + 2) * 60;
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
     // 读缓冲区
@@ -35,6 +35,7 @@ public class Queue {
 
     private List<Block> blocks = new ArrayList<>();
     private volatile Block currentBlock;
+
     /**
      * put 由评测程序保证了 queue 级别的同步
      *
@@ -58,7 +59,7 @@ public class Queue {
 
     private void flush() {
         writeBuffer.flip();
-        long writePosition = wrotePosition.getAndAdd(bufferSize);
+        long writePosition = wrotePosition.getAndAdd(currentBlock.messageLength);
         currentBlock.offset = writePosition;
         try {
             channel.write(writeBuffer, writePosition);
@@ -75,7 +76,7 @@ public class Queue {
 
     private void flushForGet() {
         writeBuffer.flip();
-        long writePosition = wrotePosition.getAndAdd(bufferSize);
+        long writePosition = wrotePosition.getAndAdd(currentBlock.messageLength);
         currentBlock.offset = writePosition;
         try {
             channel.write(writeBuffer, writePosition);
@@ -116,6 +117,7 @@ public class Queue {
         int endIndex = Math.min(startIndex + (int) num - 1, maxIndex);
         int startBlock = -1;
         int endBlock = -1;
+        // TODO 二分
         for (int i = 0; i < blockSize; i++) {
             Block blockItem = blocks.get(i);
             if (blockItem.queueIndex <= startIndex && startIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {
@@ -131,7 +133,6 @@ public class Queue {
         List<byte[]> result = new ArrayList<>();
         for (int j = startBlock; j <= endBlock; j++) {
             Block block = blocks.get(j);
-//            ByteBuffer byteBuffer = ByteBuffer.allocateDirect(block.messageLength);
             ByteBuffer byteBuffer = readBufferHolder.get();
             byteBuffer.clear();
             try {
