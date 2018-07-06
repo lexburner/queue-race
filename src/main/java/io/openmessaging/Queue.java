@@ -18,19 +18,23 @@ public class Queue {
 
     private FileChannel channel;
     private AtomicLong wrotePosition;
-    private boolean firstGet = true;
+
+    private volatile boolean firstGet = true;
 
     public Queue(FileChannel channel, AtomicLong wrotePosition) {
         this.channel = channel;
         this.wrotePosition = wrotePosition;
     }
 
+    // 缓冲区大小
     public final static int bufferSize = 3 * 1024;
-    // queue 缓冲区
-    private ByteBuffer queueBuffer = ByteBuffer.allocateDirect(bufferSize);
+    // 写缓冲区
+    private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
+    // 读缓冲区
+    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
+
     private List<Block> blocks = new ArrayList<>();
     private volatile Block currentBlock;
-    private ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
     /**
      * put 由评测程序保证了 queue 级别的同步
      *
@@ -42,26 +46,26 @@ public class Queue {
             currentBlock.queueIndex = 0;
         }
         // 缓冲区满，先落盘
-        if (message.length + SINGLE_MESSAGE_SIZE > queueBuffer.remaining()) {
+        if (message.length + SINGLE_MESSAGE_SIZE > writeBuffer.remaining()) {
             // 落盘
             flush();
         }
-        queueBuffer.putShort((short) message.length);
-        queueBuffer.put(message);
+        writeBuffer.putShort((short) message.length);
+        writeBuffer.put(message);
         currentBlock.messageSize += 1;
         currentBlock.messageLength += message.length + SINGLE_MESSAGE_SIZE;
     }
 
     private void flush() {
-        queueBuffer.flip();
+        writeBuffer.flip();
         long writePosition = wrotePosition.getAndAdd(bufferSize);
         currentBlock.offset = writePosition;
         try {
-            channel.write(queueBuffer, writePosition);
+            channel.write(writeBuffer, writePosition);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        queueBuffer.clear();
+        writeBuffer.clear();
 
         blocks.add(currentBlock);
         int newIndex = currentBlock.queueIndex + currentBlock.messageSize;
@@ -70,16 +74,16 @@ public class Queue {
     }
 
     private void flushForGet() {
-        queueBuffer.flip();
+        writeBuffer.flip();
         long writePosition = wrotePosition.getAndAdd(bufferSize);
         currentBlock.offset = writePosition;
         try {
-            channel.write(queueBuffer, writePosition);
+            channel.write(writeBuffer, writePosition);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        queueBuffer.clear();
-        queueBuffer = null;
+        writeBuffer.clear();
+        writeBuffer = null;
         blocks.add(currentBlock);
     }
 
