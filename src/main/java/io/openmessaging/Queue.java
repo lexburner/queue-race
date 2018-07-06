@@ -25,7 +25,7 @@ public class Queue {
         this.wrotePosition = wrotePosition;
     }
 
-    public final static int bufferSize = 3 * 1024;
+    public final static int bufferSize = 4 * 1024;
     // queue 缓冲区
     private ByteBuffer queueBuffer = ByteBuffer.allocateDirect(bufferSize);
     private List<Block> blocks = new ArrayList<>();
