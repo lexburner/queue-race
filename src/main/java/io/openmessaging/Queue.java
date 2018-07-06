@@ -27,7 +27,7 @@ public class Queue {
     }
 
     // 缓冲区大小
-    public final static int bufferSize = (58 + 2) * 60;
+    public final static int bufferSize = (58 + 2) * 30;
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
     // 读缓冲区
@@ -117,16 +117,38 @@ public class Queue {
         int endIndex = Math.min(startIndex + (int) num - 1, maxIndex);
         int startBlock = -1;
         int endBlock = -1;
-        // TODO 二分
-        for (int i = 0; i < blockSize; i++) {
-            Block blockItem = blocks.get(i);
-            if (blockItem.queueIndex <= startIndex && startIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {
-                startBlock = i;
+        // find startBlock
+        int left = 0;
+        int right = blockSize - 1;
+        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
+            int mid = left + ((right - left) >> 1);//防止溢出
+            Block blockItem = blocks.get(mid);
+            if (blockItem.queueIndex <= startIndex && startIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {//找到了
+                startBlock = mid;
+                break;
             }
-            if (blockItem.queueIndex <= endIndex && endIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {
-                endBlock = i;
-            }
+            else if (startIndex < blockItem.queueIndex)
+                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
+            else
+                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
         }
+
+        // find endBlock
+        left = 0;
+        right = blockSize - 1;
+        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
+            int mid = left + ((right - left) >> 1);//防止溢出
+            Block blockItem = blocks.get(mid);
+            if (blockItem.queueIndex <= endIndex && endIndex <= blockItem.queueIndex + blockItem.messageSize - 1){//找到了
+                endBlock = mid;
+                break;
+            }
+            else if (endIndex < blockItem.queueIndex)
+                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
+            else
+                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
+        }
+
         if (startBlock == -1 || endBlock == -1) {
             throw new RuntimeException("未找到对应的数据块");
         }
