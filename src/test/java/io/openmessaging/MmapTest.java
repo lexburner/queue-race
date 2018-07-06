@@ -450,11 +450,13 @@ public class MmapTest {
     @Test
     public void test13() throws Exception {
         String dir = "/Users/kirito/data/";
-        RandomAccessFile memoryMappedFile = new RandomAccessFile(dir + "all.data", "rw");
+        RandomAccessFile memoryMappedFile = new RandomAccessFile(dir + "hello.data", "rw");
         FileChannel channel = memoryMappedFile.getChannel();
-        CountDownLatch countDownLatch = new CountDownLatch(100);
-        for (int i = 0; i < 100; i++) {
-            new Thread(new Runnable() {
+        int messageSize = 10000;
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        CountDownLatch countDownLatch = new CountDownLatch(messageSize);
+        for (int i = 0; i < messageSize; i++) {
+            executorService.execute(new Runnable() {
                 @Override
                 public void run() {
                     try {
@@ -464,15 +466,57 @@ public class MmapTest {
                     }
                     countDownLatch.countDown();
                 }
-            }).start();
+            });
         }
         countDownLatch.await();
         channel.close();
         memoryMappedFile.close();
     }
 
+    /**
+     * 测试并发读
+     *
+     * @throws Exception
+     */
     @Test
     public void test14() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile memoryMappedFile = new RandomAccessFile(dir + "hello.data", "rw");
+        FileChannel channel = memoryMappedFile.getChannel();
+        int messageSize = 10000;
+        AtomicInteger position = new AtomicInteger(0);
+        final int messageLen = "hello world!".getBytes().length;
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        CountDownLatch countDownLatch = new CountDownLatch(messageSize);
+        ThreadLocal<ByteBuffer> byteBufferThreadLocal = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(messageLen));
+        for (int i = 0; i < messageSize; i++) {
+            executorService.execute(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        byte[] messageBytes = new byte[messageLen];
+                        ByteBuffer byteBuffer = byteBufferThreadLocal.get();
+                        byteBuffer.clear();
+                        int readPosition = position.getAndAdd(messageLen);
+                        channel.read(byteBuffer,readPosition);
+                        byteBuffer.flip();
+                        byteBuffer.get(messageBytes);
+                        System.out.println(new String(messageBytes));
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        countDownLatch.await();
+        channel.close();
+        memoryMappedFile.close();
+    }
+
+
+    @Test
+    public void test15() throws Exception {
         String dir = "/Users/kirito/data/";
         RandomAccessFile memoryMappedFile = new RandomAccessFile(dir + "all.data", "rw");
         FileChannel channel = memoryMappedFile.getChannel();
@@ -490,6 +534,23 @@ public class MmapTest {
         }
         channel.close();
         memoryMappedFile.close();
+    }
+
+    @Test
+    public void test16() throws Exception {
+        for (int i = 0; i < 1000; i++) {
+            byte temp = (byte) i;
+            int a = temp & (0xff);
+            System.out.println(a);
+        }
+        System.out.println(Short.MAX_VALUE);
+    }
+
+    @Test
+    public void test17() throws Exception {
+        for (int i = 0; i < 1000; i++) {
+        }
+        System.out.println(Short.MAX_VALUE);
     }
 
 }
