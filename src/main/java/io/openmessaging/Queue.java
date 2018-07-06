@@ -123,32 +123,8 @@ public class Queue {
         // find startBlock
         int left = 0;
         int right = blockSize - 1;
-        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
-            int mid = left + ((right - left) >> 1);//防止溢出
-            Block blockItem = blocks.get(mid);
-            if (blockItem.queueIndex <= startIndex && startIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {//找到了
-                startBlock = mid;
-                break;
-            } else if (startIndex < blockItem.queueIndex)
-                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
-            else
-                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
-        }
-
-        // find endBlock
-        left = 0;
-        right = blockSize - 1;
-        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
-            int mid = left + ((right - left) >> 1);//防止溢出
-            Block blockItem = blocks.get(mid);
-            if (blockItem.queueIndex <= endIndex && endIndex <= blockItem.queueIndex + blockItem.messageSize - 1) {//找到了
-                endBlock = mid;
-                break;
-            } else if (endIndex < blockItem.queueIndex)
-                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
-            else
-                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
-        }
+        startBlock = BinarySearch(blocks, startIndex, left, right);
+        endBlock = BinarySearch(blocks, endIndex, startBlock, right);
 
         if (startBlock == -1 || endBlock == -1) {
             throw new RuntimeException("未找到对应的数据块");
@@ -176,5 +152,21 @@ public class Queue {
         return result;
     }
 
+    private int BinarySearch(List<Block> blocks, int index, int left, int right) {
+        int block = -1;
+        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
+            int mid = left + ((right - left) >> 1);//防止溢出
+            Block blockItem = blocks.get(mid);
+            if (blockItem.queueIndex <= index && index <= blockItem.queueIndex + blockItem.messageSize - 1) {//找到了
+                index = mid;
+                break;
+            } else if (index < blockItem.queueIndex)
+                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
+            else
+                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
+        }
+
+        return index;
+    }
 
 }
