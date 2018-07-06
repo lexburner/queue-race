@@ -29,7 +29,7 @@ public class Queue {
     }
 
     // 缓冲区大小
-    public final static int bufferSize = (58 + 2) * 10;
+    public final static int bufferSize = (58 + 2) * 60;
 
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
