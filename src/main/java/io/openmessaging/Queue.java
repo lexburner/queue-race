@@ -1,13 +1,9 @@
 package io.openmessaging;
 
-import sun.nio.ch.DirectBuffer;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -35,8 +31,7 @@ public class Queue {
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
     // 读缓冲区
-    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
-
+//    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
     private List<Block> blocks = new ArrayList<>();
     private volatile Block currentBlock;
 
@@ -88,9 +83,11 @@ public class Queue {
             e.printStackTrace();
         }
         writeBuffer.clear();
-        ((DirectBuffer) writeBuffer).cleaner().clean();
+//        ((DirectBuffer) writeBuffer).cleaner().clean();
         blocks.add(currentBlock);
     }
+
+    private java.util.Queue<PreReadMessage> preReadMessages = new ArrayDeque<>();
 
     /**
      * 读可能存在并发读，注意 race condition
@@ -99,7 +96,7 @@ public class Queue {
      * @param num
      * @return
      */
-    public Collection<byte[]> get(long offset, long num) {
+    public synchronized Collection<byte[]> get(long offset, long num) {
         if (currentBlock == null) {
             return DefaultQueueStoreImpl.EMPTY;
         }
@@ -131,24 +128,57 @@ public class Queue {
             throw new RuntimeException("未找到对应的数据块");
         }
         List<byte[]> result = new ArrayList<>();
+
+        // 优先从读缓冲区读
+        if (preReadMessages.size() > 0) {
+            System.out.println(preReadMessages.size());
+            PreReadMessage head = preReadMessages.peek();
+            // 非顺序读 清空缓冲区
+            if (startIndex != head.index) {
+                preReadMessages.clear();
+            } else {
+                // 存在内存缓冲区
+                int preReadMessageSize = preReadMessages.size();
+                for (int cnt = 0; startIndex <= endIndex && cnt < preReadMessageSize; startIndex++, cnt++) {
+                    result.add(preReadMessages.poll().message);
+                }
+            }
+        }
+
+        if(startIndex>endIndex){
+            // get all from 缓冲区
+            return result;
+        }
+        // need read from disk
+        //  startBlock need calculate again，while the endBlock stay the same
+        startBlock = binarySearch(blocks, startIndex, left, right);
+
         for (int j = startBlock; j <= endBlock; j++) {
             Block block = blocks.get(j);
-            ByteBuffer byteBuffer = readBufferHolder.get();
-            byteBuffer.clear();
+            ByteBuffer readBuffer = writeBuffer;
+            readBuffer.clear();
             try {
-                channel.read(byteBuffer, block.offset);
+                channel.read(readBuffer, block.offset);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            byteBuffer.flip();
+            readBuffer.flip();
             for (int i = 0; i < block.messageSize; i++) {
-                short len = byteBuffer.getShort();
+                short len = readBuffer.getShort();
                 byte[] bytes = new byte[len];
-                byteBuffer.get(bytes);
+                readBuffer.get(bytes);
                 if (startIndex <= block.queueIndex + i && block.queueIndex + i <= endIndex) {
                     result.add(bytes);
                 }
+                // 最后一块考虑缓存
+                if(j==endBlock && block.queueIndex + i>endIndex){
+                    PreReadMessage preReadMessage = new PreReadMessage();
+                    preReadMessage.index = block.queueIndex + i;
+                    preReadMessage.message = bytes;
+                    preReadMessages.offer(preReadMessage);
+                }
             }
+
         }
         return result;
     }
@@ -169,4 +199,11 @@ public class Queue {
         return index;
     }
 
+    class PreReadMessage {
+        public int index;
+        public byte[] message;
+    }
+
 }
+
+
