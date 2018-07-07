@@ -4,10 +4,9 @@ import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -20,6 +19,7 @@ public class Queue {
 
     private FileChannel channel;
     private AtomicLong wrotePosition;
+    private static Map<FileChannel,MappedByteBuffer> mappedByteBufferMap = new HashMap<>();
 
     private volatile boolean firstGet = true;
 
@@ -29,8 +29,8 @@ public class Queue {
     }
 
     // 缓冲区大小
-    public final static int bufferSize = (58 + 2) * 60;
-//    public final static int bufferSize = 4*1024;
+//    public final static int bufferSize = (58 + 2) * 60;
+    public final static int bufferSize = 4*1024;
 
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
