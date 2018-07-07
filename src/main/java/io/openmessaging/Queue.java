@@ -15,11 +15,11 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class Queue {
 
-    public final static int SINGLE_MESSAGE_SIZE = 2;
+    public final static int SINGLE_MESSAGE_SIZE = 1;
 
     private FileChannel channel;
     private AtomicLong wrotePosition;
-    private static Map<FileChannel,MappedByteBuffer> mappedByteBufferMap = new HashMap<>();
+//    private static Map<FileChannel,MappedByteBuffer> mappedByteBufferMap = new HashMap<>();
 
     private volatile boolean firstGet = true;
 
@@ -30,7 +30,7 @@ public class Queue {
 
     // 缓冲区大小
 //    public final static int bufferSize = (58 + 2) * 60;
-    public final static int bufferSize = 4*1024;
+    public final static int bufferSize =2*1024;
 
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
@@ -52,13 +52,10 @@ public class Queue {
         }
         // 缓冲区满，先落盘
         if (message.length + SINGLE_MESSAGE_SIZE > writeBuffer.remaining()) {
-            while (writeBuffer.hasRemaining()){
-                writeBuffer.put((byte) 0);
-            }
             // 落盘
             flush();
         }
-        writeBuffer.putShort((short) message.length);
+        writeBuffer.put((byte) message.length);
         writeBuffer.put(message);
         currentBlock.messageSize += 1;
         currentBlock.messageLength += message.length + SINGLE_MESSAGE_SIZE;
@@ -145,8 +142,8 @@ public class Queue {
             }
             byteBuffer.flip();
             for (int i = 0; i < block.messageSize; i++) {
-                short len = byteBuffer.getShort();
-                byte[] bytes = new byte[len];
+                byte len = byteBuffer.get();
+                byte[] bytes = new byte[0xff & len];
                 byteBuffer.get(bytes);
                 if (startIndex <= block.queueIndex + i && block.queueIndex + i <= endIndex) {
                     result.add(bytes);
