@@ -52,6 +52,9 @@ public class Queue {
         }
         // 缓冲区满，先落盘
         if (message.length + SINGLE_MESSAGE_SIZE > writeBuffer.remaining()) {
+            while (writeBuffer.hasRemaining()){
+                writeBuffer.put((byte) 0);
+            }
             // 落盘
             flush();
         }
