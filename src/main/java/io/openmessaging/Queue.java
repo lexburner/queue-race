@@ -35,7 +35,7 @@ public class Queue {
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
     // 读缓冲区
-//    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
+    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
 
     private List<Block> blocks = new ArrayList<>();
     private volatile Block currentBlock;
@@ -88,7 +88,7 @@ public class Queue {
             e.printStackTrace();
         }
         writeBuffer.clear();
-//        ((DirectBuffer) writeBuffer).cleaner().clean();
+        ((DirectBuffer) writeBuffer).cleaner().clean();
         blocks.add(currentBlock);
     }
 
@@ -99,7 +99,7 @@ public class Queue {
      * @param num
      * @return
      */
-    public synchronized Collection<byte[]> get(long offset, long num) {
+    public Collection<byte[]> get(long offset, long num) {
         if (currentBlock == null) {
             return DefaultQueueStoreImpl.EMPTY;
         }
@@ -133,7 +133,7 @@ public class Queue {
         List<byte[]> result = new ArrayList<>();
         for (int j = startBlock; j <= endBlock; j++) {
             Block block = blocks.get(j);
-            ByteBuffer byteBuffer = writeBuffer;
+            ByteBuffer byteBuffer = readBufferHolder.get();
             byteBuffer.clear();
             try {
                 channel.read(byteBuffer, block.offset);
