@@ -15,7 +15,7 @@ public class CustomTester {
     public static void main(String args[]) throws Exception {
         //评测相关配置
         //发送阶段的发送数量，也即发送阶段必须要在规定时间内把这些消息发送完毕方可
-        int msgNum  = 20000000;
+        int msgNum  = 200000000;
         //发送阶段的最大持续时间，也即在该时间内，如果消息依然没有发送完毕，则退出评测
         int sendTime = 30 * 60 * 1000;
         //消费阶段的最大持续时间，也即在该时间内，如果消息依然没有消费完毕，则退出评测

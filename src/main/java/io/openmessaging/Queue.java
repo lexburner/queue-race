@@ -19,7 +19,6 @@ public class Queue {
 
     private FileChannel channel;
     private AtomicLong wrotePosition;
-//    private static Map<FileChannel,MappedByteBuffer> mappedByteBufferMap = new HashMap<>();
 
     private volatile boolean firstGet = true;
     private volatile boolean firstPut = true;
@@ -30,7 +29,6 @@ public class Queue {
     }
 
     // 缓冲区大小
-//    public final static int bufferSize = (58 + 2) * 60;
     public final static int bufferSize = SINGLE_MESSAGE_SIZE * BLOCK_SIZE;
 
     // 写缓冲区
@@ -47,9 +45,6 @@ public class Queue {
     private int queueIndexes[] = new int[size];
 
     private static final byte FILL_BYTE = (byte)0;
-
-//    private List<Block> blocks = new ArrayList<>();
-//    private volatile Block currentBlock;
 
     private long offset;
     private int queueIndex;
@@ -195,21 +190,6 @@ public class Queue {
         }
         return result;
     }
-
-//    private int binarySearch(int index, int left, int right) {
-//        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
-//            int mid = left + ((right - left) >> 1);//防止溢出
-//            if (this.queueIndexes[mid] <= index && index <= this.queueIndexes[mid] + this.messageSizes[mid] - 1) {//找到了
-//                index = mid;
-//                break;
-//            } else if (index < this.queueIndexes[mid])
-//                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
-//            else
-//                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
-//        }
-//
-//        return index;
-//    }
 
     public static int[] copyOf(int[] original, int newLength) {
         int[] copy = new int[newLength];

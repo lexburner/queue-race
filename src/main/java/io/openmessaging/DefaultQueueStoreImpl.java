@@ -23,11 +23,11 @@ public class DefaultQueueStoreImpl extends QueueStore {
 
     //    public Map<String, Queue> queueMap = new ConcurrentHashMap<>();
     public static Collection<byte[]> EMPTY = new ArrayList<>();
-    private static final int FILE_SIZE = 1;
+    private static final int FILE_SIZE = 200;
     private ConcurrentHashMap<String, Queue>[] queueMaps;
 
     // FILE_INDEX can be different from FILE_SIZE
-    private static final int FILE_INDEX = 1;
+    private static final int FILE_INDEX = 200;
 
 
     private FileChannel[] channels;
