@@ -548,9 +548,18 @@ public class MmapTest {
 
     @Test
     public void test17() throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(4*1000);
+        byteBuffer.clear();
         for (int i = 0; i < 1000; i++) {
+            byteBuffer.putInt(i);
         }
-        System.out.println(Short.MAX_VALUE);
+
+        byteBuffer.flip();
+        while (byteBuffer.hasRemaining()){
+            System.out.println(byteBuffer.getInt());
+        }
     }
+
+
 
 }

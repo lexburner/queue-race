@@ -1,7 +1,5 @@
 package io.openmessaging;
 
-import sun.nio.ch.DirectBuffer;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -31,10 +29,10 @@ public class Queue {
     // 缓冲区大小
     public final static int bufferSize = SINGLE_MESSAGE_SIZE * BLOCK_SIZE;
 
-    // 写缓冲区
-    private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
-    // 读缓冲区
-    private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
+    // 读写缓冲区
+    private ByteBuffer buffer = ByteBuffer.allocateDirect(bufferSize);
+    //
+    private int lastReadOffset = -1;
 
     private static final int size = 2000 / BLOCK_SIZE + 1;
 //    private static final int size = 2000;
@@ -70,7 +68,7 @@ public class Queue {
             firstPut = false;
         }
         // 缓冲区满，先落盘
-        if (SINGLE_MESSAGE_SIZE > writeBuffer.remaining()) {
+        if (SINGLE_MESSAGE_SIZE > buffer.remaining()) {
             // 落盘
             flush();
         }
@@ -85,20 +83,20 @@ public class Queue {
             }
             message = newMessage;
         }
-        writeBuffer.put(message);
+        buffer.put(message);
         this.queueLength ++;
     }
 
     private void flush() {
-        writeBuffer.flip();
+        buffer.flip();
         long writePosition = wrotePosition.getAndAdd(bufferSize);
         this.offset = writePosition;
         try {
-            channel.write(writeBuffer, writePosition);
+            channel.write(buffer, writePosition);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        writeBuffer.clear();
+        buffer.clear();
 
 
         offsets[blockSize] = this.offset;
@@ -113,16 +111,16 @@ public class Queue {
     }
 
     private void flushForGet() {
-        writeBuffer.flip();
+        buffer.flip();
         long writePosition = wrotePosition.getAndAdd(bufferSize);
         this.offset = writePosition;
         try {
-            channel.write(writeBuffer, writePosition);
+            channel.write(buffer, writePosition);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        writeBuffer.clear();
-        ((DirectBuffer) writeBuffer).cleaner().clean();
+        buffer.clear();
+//        ((DirectBuffer) buffer).cleaner().clean();
 
         offsets[blockSize] = this.offset;
         queueIndexes[blockSize] = this.queueIndex;
@@ -136,7 +134,7 @@ public class Queue {
      * @param num
      * @return
      */
-    public Collection<byte[]> get(long offset, long num) {
+    public synchronized Collection<byte[]> get(long offset, long num) {
         if (firstGet) {
             synchronized (this) {
                 if (firstGet) {
@@ -150,42 +148,70 @@ public class Queue {
         }
         int startIndex = (int) offset;
         int endIndex = Math.min(startIndex + (int) num - 1, queueLength-1);
+
+        List<byte[]> result = new ArrayList<>();
+
+        if(lastReadOffset==startIndex){
+            while (startIndex<=endIndex&&buffer.hasRemaining()){
+                startIndex++;
+                byte[] cacheMessage = new byte[SINGLE_MESSAGE_SIZE];
+                buffer.get(cacheMessage);
+                // todo
+//                cacheMessage = truncate(cacheMessage);
+                result.add(cacheMessage);
+                lastReadOffset++;
+            }
+        }
+        // 从 cache 中获取到了所有的消息
+        if(startIndex>endIndex){
+            return result;
+        }
+
         int startBlock = startIndex / BLOCK_SIZE;
         int endBlock = endIndex / BLOCK_SIZE;
 
-        List<byte[]> result = new ArrayList<>();
         for (int j = startBlock; j <= endBlock; j++) {
-            long readOffset;
-            int blockStartIndex;
-            int size;
-            if(j == startBlock){
-                readOffset = this.offsets[j] + (startIndex % BLOCK_SIZE)*SINGLE_MESSAGE_SIZE;
-                blockStartIndex = startIndex % BLOCK_SIZE;
-            }else{
-                readOffset = this.offsets[j];
-                blockStartIndex = 0;
-            }
-            if(j == endBlock){
-                size = endIndex % BLOCK_SIZE - blockStartIndex + 1;
-            }else{
-                size = BLOCK_SIZE - blockStartIndex;
-            }
+//            long readOffset;
+//            int blockStartIndex;
+//            int size;
+//            if(j == startBlock){
+//                readOffset = this.offsets[j] + (startIndex % BLOCK_SIZE)*SINGLE_MESSAGE_SIZE;
+//                blockStartIndex = startIndex % BLOCK_SIZE;
+//            }else{
+//                readOffset = this.offsets[j];
+//                blockStartIndex = 0;
+//            }
+//            if(j == endBlock){
+//                size = endIndex % BLOCK_SIZE - blockStartIndex + 1;
+//            }else{
+//                size = BLOCK_SIZE - blockStartIndex;
+//            }
+            int blockStartIndex = j *BLOCK_SIZE;
 
-            ByteBuffer byteBuffer = readBufferHolder.get();
-            byteBuffer.clear();
-            byteBuffer.limit(size*SINGLE_MESSAGE_SIZE);
+
+            buffer.clear();
             try {
-                channel.read(byteBuffer, readOffset);
+                channel.read(buffer, this.offsets[j]);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            byteBuffer.flip();
-            for (int i = 0; i < size; i++) {
-                byte[] bytes = new byte[SINGLE_MESSAGE_SIZE];
-                byteBuffer.get(bytes);
-                // TODO
-//                bytes = truncate(bytes);
-                result.add(bytes);
+            buffer.flip();
+            for (int i = 0; i < BLOCK_SIZE; i++) {
+                if(startIndex <= blockStartIndex+i && blockStartIndex+i <= endIndex){
+                    byte[] bytes = new byte[SINGLE_MESSAGE_SIZE];
+                    buffer.get(bytes);
+                    // TODO
+//                    bytes = truncate(bytes);
+                    result.add(bytes);
+                    this.lastReadOffset = blockStartIndex+i+1;
+                }else if(blockStartIndex + i > endIndex){
+                    break;
+                }else {
+                    // skip
+                    byte[] bytes = new byte[SINGLE_MESSAGE_SIZE];
+                    buffer.get(bytes);
+                }
+
             }
         }
         return result;
