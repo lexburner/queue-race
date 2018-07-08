@@ -4,7 +4,6 @@ import sun.nio.ch.DirectBuffer;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -15,7 +14,8 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class Queue {
 
-    public final static int SINGLE_MESSAGE_SIZE = 1;
+    public final static int SINGLE_MESSAGE_SIZE = 58;
+    public final static int BLOCK_SIZE = 40;
 
     private FileChannel channel;
     private AtomicLong wrotePosition;
@@ -31,33 +31,37 @@ public class Queue {
 
     // 缓冲区大小
 //    public final static int bufferSize = (58 + 2) * 60;
-    public final static int bufferSize =2*1024;
+    public final static int bufferSize = SINGLE_MESSAGE_SIZE * BLOCK_SIZE;
 
     // 写缓冲区
     private ByteBuffer writeBuffer = ByteBuffer.allocateDirect(bufferSize);
     // 读缓冲区
     private static ThreadLocal<ByteBuffer> readBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(bufferSize));
 
-    private static final int size = 2000 /( bufferSize / 59 );
+    private static final int size = 2000 / BLOCK_SIZE + 1;
 //    private static final int size = 2000;
 
-    private int messageSizes[] = new int[size];
-    // 消息具体的长度
-    private int messageLengths[] = new int[size];
     // 记录该块在物理文件中的起始偏移量
     private long offsets[] = new long[size];
     // 记录该块中第一个消息的起始消息编号
     private int queueIndexes[] = new int[size];
 
+    private static final byte FILL_BYTE = (byte)0;
+
 //    private List<Block> blocks = new ArrayList<>();
 //    private volatile Block currentBlock;
 
-    int messageSize;
-    int messageLength;
-    long offset;
-    int queueIndex;
+    private long offset;
+    private int queueIndex;
 
-    int blockIndex = 0;
+    /**
+     * 队列的总块数
+     */
+    private int blockSize = 0;
+    /**
+     * 队列的总消息数
+     */
+    private int queueLength = 0;
 
 
     /**
@@ -67,23 +71,27 @@ public class Queue {
      */
     public void put(byte[] message) {
         if(firstPut){
-            this.messageSize=0;
-            this.messageLength=0;
             this.queueIndex=0;
             firstPut = false;
         }
         // 缓冲区满，先落盘
-        if (message.length + SINGLE_MESSAGE_SIZE > writeBuffer.remaining()) {
-//            while (writeBuffer.hasRemaining()){
-//                writeBuffer.put((byte)0);
-//            }
+        if (SINGLE_MESSAGE_SIZE > writeBuffer.remaining()) {
             // 落盘
             flush();
         }
-        writeBuffer.put((byte) message.length);
+        if(message.length<SINGLE_MESSAGE_SIZE){
+            byte[] newMessage = new byte[SINGLE_MESSAGE_SIZE];
+            for(int i=0;i<SINGLE_MESSAGE_SIZE;i++){
+                if(i<message.length){
+                    newMessage[i] = message[i];
+                }else{
+                    newMessage[i] = FILL_BYTE;
+                }
+            }
+            message = newMessage;
+        }
         writeBuffer.put(message);
-        this.messageSize += 1;
-        this.messageLength += message.length + SINGLE_MESSAGE_SIZE;
+        this.queueLength ++;
     }
 
     private void flush() {
@@ -98,24 +106,15 @@ public class Queue {
         writeBuffer.clear();
 
 
-        messageSizes[blockIndex] = this.messageSize;
-        messageLengths[blockIndex] = this.messageLength;
-        offsets[blockIndex] = this.offset;
-        queueIndexes[blockIndex] = this.queueIndex;
-        blockIndex++;
-        if(blockIndex>messageSizes.length * 0.9){
-            copyOf(messageSizes, messageSizes.length*2);
-            copyOf(messageLengths, messageLengths.length*2);
-            copyOf(offsets, offsets.length*2);
-            copyOf(queueIndexes, queueIndexes.length*2);
-//            System.out.println("扩容"+messageSizes.length+"=》"+messageSizes.length*2);
+        offsets[blockSize] = this.offset;
+        queueIndexes[blockSize] = this.queueIndex;
+        blockSize++;
+        if(blockSize >offsets.length * 0.7){
+            offsets = copyOf(offsets, offsets.length*2);
+            queueIndexes = copyOf(queueIndexes, queueIndexes.length*2);
         }
 
-
-        int newIndex = this.queueIndex + this.messageSize;
-        this.messageSize = 0;
-        this.messageLength = 0;
-        this.queueIndex = newIndex;
+        this.queueIndex += BLOCK_SIZE;
     }
 
     private void flushForGet() {
@@ -130,11 +129,9 @@ public class Queue {
         writeBuffer.clear();
         ((DirectBuffer) writeBuffer).cleaner().clean();
 
-        messageSizes[blockIndex] = this.messageSize;
-        messageLengths[blockIndex] = this.messageLength;
-        offsets[blockIndex] = this.offset;
-        queueIndexes[blockIndex] = this.queueIndex;
-        blockIndex++;
+        offsets[blockSize] = this.offset;
+        queueIndexes[blockSize] = this.queueIndex;
+        blockSize++;
     }
 
     /**
@@ -153,59 +150,66 @@ public class Queue {
                 }
             }
         }
-        int maxIndex = queueIndexes[this.blockIndex -1] + messageSizes[this.blockIndex -1] - 1;
-        if (offset > maxIndex) {
+        if (offset > queueLength -1) {
             return DefaultQueueStoreImpl.EMPTY;
         }
         int startIndex = (int) offset;
-        int endIndex = Math.min(startIndex + (int) num - 1, maxIndex);
-        int startBlock = -1;
-        int endBlock = -1;
-        // find startBlock
-        int left = 0;
-        int right = this.blockIndex -1;
-        startBlock = binarySearch(startIndex, left, right);
-        endBlock = binarySearch(endIndex, startBlock, right);
+        int endIndex = Math.min(startIndex + (int) num - 1, queueLength-1);
+        int startBlock = startIndex / BLOCK_SIZE;
+        int endBlock = endIndex / BLOCK_SIZE;
 
-        if (startBlock == -1 || endBlock == -1) {
-            throw new RuntimeException("未找到对应的数据块");
-        }
         List<byte[]> result = new ArrayList<>();
         for (int j = startBlock; j <= endBlock; j++) {
+            long readOffset;
+            int blockStartIndex;
+            int size;
+            if(j == startBlock){
+                readOffset = this.offsets[j] + (startIndex % BLOCK_SIZE)*SINGLE_MESSAGE_SIZE;
+                blockStartIndex = startIndex % BLOCK_SIZE;
+            }else{
+                readOffset = this.offsets[j];
+                blockStartIndex = 0;
+            }
+            if(j == endBlock){
+                size = endIndex % BLOCK_SIZE - blockStartIndex + 1;
+            }else{
+                size = BLOCK_SIZE - blockStartIndex;
+            }
+
             ByteBuffer byteBuffer = readBufferHolder.get();
             byteBuffer.clear();
+            byteBuffer.limit(size*SINGLE_MESSAGE_SIZE);
             try {
-                channel.read(byteBuffer, this.offsets[j]);
+                channel.read(byteBuffer, readOffset);
             } catch (IOException e) {
                 e.printStackTrace();
             }
             byteBuffer.flip();
-            for (int i = 0; i < this.messageSizes[j]; i++) {
-                byte len = byteBuffer.get();
-                byte[] bytes = new byte[0xff & len];
+            for (int i = 0; i < size; i++) {
+                byte[] bytes = new byte[SINGLE_MESSAGE_SIZE];
                 byteBuffer.get(bytes);
-                if (startIndex <= this.queueIndexes[j] + i && this.queueIndexes[j] + i <= endIndex) {
-                    result.add(bytes);
-                }
+                // TODO
+//                bytes = truncate(bytes);
+                result.add(bytes);
             }
         }
         return result;
     }
 
-    private int binarySearch(int index, int left, int right) {
-        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
-            int mid = left + ((right - left) >> 1);//防止溢出
-            if (this.queueIndexes[mid] <= index && index <= this.queueIndexes[mid] + this.messageSizes[mid] - 1) {//找到了
-                index = mid;
-                break;
-            } else if (index < this.queueIndexes[mid])
-                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
-            else
-                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
-        }
-
-        return index;
-    }
+//    private int binarySearch(int index, int left, int right) {
+//        while (left <= right) {//慎重截止条件，根据指针移动条件来看，这里需要将数组判断到空为止
+//            int mid = left + ((right - left) >> 1);//防止溢出
+//            if (this.queueIndexes[mid] <= index && index <= this.queueIndexes[mid] + this.messageSizes[mid] - 1) {//找到了
+//                index = mid;
+//                break;
+//            } else if (index < this.queueIndexes[mid])
+//                right = mid - 1;//给定值key一定在左边，并且不包括当前这个中间值
+//            else
+//                left = mid + 1;//给定值key一定在右边，并且不包括当前这个中间值
+//        }
+//
+//        return index;
+//    }
 
     public static int[] copyOf(int[] original, int newLength) {
         int[] copy = new int[newLength];
@@ -220,5 +224,15 @@ public class Queue {
         return copy;
     }
 
+    private byte[] truncate(byte[] message){
+        int realSize = 0;
+        for(int i=0;i<SINGLE_MESSAGE_SIZE;i++){
+            if(message[i]==FILL_BYTE){
+                realSize = i;
+                break;
+            }
+        }
+        return Arrays.copyOf(message, realSize);
+    }
 
 }
