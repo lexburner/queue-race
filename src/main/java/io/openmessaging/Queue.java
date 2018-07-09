@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Queue {
 
     public final static int SINGLE_MESSAGE_SIZE = 58;
-    public final static int BLOCK_SIZE = 40;
+    public final static int BLOCK_SIZE = 70;
 
     private FileChannel channel;
     private AtomicLong wrotePosition;
@@ -27,7 +27,7 @@ public class Queue {
     }
 
     // 缓冲区大小
-    public final static int bufferSize = SINGLE_MESSAGE_SIZE * BLOCK_SIZE;
+    public final static int bufferSize = 4 * 1024;
 
     // 读写缓冲区
     private ByteBuffer buffer = ByteBuffer.allocateDirect(bufferSize);
@@ -69,6 +69,11 @@ public class Queue {
         }
         // 缓冲区满，先落盘
         if (SINGLE_MESSAGE_SIZE > buffer.remaining()) {
+            if(buffer.hasRemaining()){
+                byte[] fillBytes = new byte[buffer.remaining()];
+                Arrays.fill(fillBytes, FILL_BYTE);
+                buffer.put(fillBytes);
+            }
             // 落盘
             flush();
         }
@@ -152,7 +157,7 @@ public class Queue {
         List<byte[]> result = new ArrayList<>();
 
         if(lastReadOffset==startIndex){
-            while (startIndex<=endIndex&&buffer.hasRemaining()){
+            while (startIndex<=endIndex&&buffer.hasRemaining()&&buffer.remaining()>=SINGLE_MESSAGE_SIZE){
                 startIndex++;
                 byte[] cacheMessage = new byte[SINGLE_MESSAGE_SIZE];
                 buffer.get(cacheMessage);
@@ -171,23 +176,7 @@ public class Queue {
         int endBlock = endIndex / BLOCK_SIZE;
 
         for (int j = startBlock; j <= endBlock; j++) {
-//            long readOffset;
-//            int blockStartIndex;
-//            int size;
-//            if(j == startBlock){
-//                readOffset = this.offsets[j] + (startIndex % BLOCK_SIZE)*SINGLE_MESSAGE_SIZE;
-//                blockStartIndex = startIndex % BLOCK_SIZE;
-//            }else{
-//                readOffset = this.offsets[j];
-//                blockStartIndex = 0;
-//            }
-//            if(j == endBlock){
-//                size = endIndex % BLOCK_SIZE - blockStartIndex + 1;
-//            }else{
-//                size = BLOCK_SIZE - blockStartIndex;
-//            }
             int blockStartIndex = j *BLOCK_SIZE;
-
 
             buffer.clear();
             try {
