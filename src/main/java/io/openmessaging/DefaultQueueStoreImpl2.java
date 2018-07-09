@@ -18,6 +18,7 @@ public class DefaultQueueStoreImpl2 extends QueueStore {
         }
         queueMap.get(queueName).add(message);
     }
+
     public synchronized Collection<byte[]> get(String queueName, long offset, long num) {
         if (!queueMap.containsKey(queueName)) {
             return EMPTY;

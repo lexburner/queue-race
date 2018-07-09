@@ -8,11 +8,13 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Arrays;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author 徐靖峰
@@ -20,16 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class MmapTest {
 
-    public static void ensureDirOK(final String dirName) {
-        if (dirName != null) {
-            File f = new File(dirName);
-            if (!f.exists()) {
-                boolean result = f.mkdirs();
-                System.out.println((dirName + " mkdir " + (result ? "OK" : "Failed")));
-            }
-        }
-    }
-
+    public static final int _4K = 4 * 1024;
     private final static int _1K = 1 * 1024;
     private final static int _1M = 1 * 1024 * 1024;
     private final static int _1G = 1 * 1024 * 1024 * 1024;
@@ -41,6 +34,16 @@ public class MmapTest {
             "Be the change you want to see in the world.\n",
             "The weak can never forgive. Forgiveness is the attribute of the strong.\n",
     };
+
+    public static void ensureDirOK(final String dirName) {
+        if (dirName != null) {
+            File f = new File(dirName);
+            if (!f.exists()) {
+                boolean result = f.mkdirs();
+                System.out.println((dirName + " mkdir " + (result ? "OK" : "Failed")));
+            }
+        }
+    }
 
     @Test
     public void test1() throws Exception {
@@ -317,7 +320,6 @@ public class MmapTest {
         countDownLatch.await();
     }
 
-
     @Test
     public void test8() throws Exception {
         String dir = "/Users/kirito/data/";
@@ -391,8 +393,6 @@ public class MmapTest {
         System.out.println(Integer.MAX_VALUE);
         System.out.println(Long.MAX_VALUE);
     }
-
-    public static final int _4K = 4 * 1024;
 
     @Test
     public void test12() throws Exception {
@@ -498,7 +498,7 @@ public class MmapTest {
                         ByteBuffer byteBuffer = byteBufferThreadLocal.get();
                         byteBuffer.clear();
                         int readPosition = position.getAndAdd(messageLen);
-                        channel.read(byteBuffer,readPosition);
+                        channel.read(byteBuffer, readPosition);
                         byteBuffer.flip();
                         byteBuffer.get(messageBytes);
                         System.out.println(new String(messageBytes));
@@ -546,20 +546,210 @@ public class MmapTest {
         System.out.println(Short.MAX_VALUE);
     }
 
+    /**
+     * 单线程顺序写入，每次写入58字节
+     *
+     * @throws Exception
+     */
     @Test
     public void test17() throws Exception {
-        ByteBuffer byteBuffer = ByteBuffer.allocateDirect(4*1000);
-        byteBuffer.clear();
-        for (int i = 0; i < 1000; i++) {
-            byteBuffer.putInt(i);
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test1.data", "rw");
+        FileChannel channel = randomAccessFile.getChannel();
+        int singleMessageSize = 58;
+        byte[] message = new byte[singleMessageSize];
+        Arrays.fill(message, (byte) 'a');
+        // 写入 10g 数据
+        long fileSize = 1L * 1024 * 1024 * 1024;
+        ByteBuffer writeBuffer = ByteBuffer.allocateDirect(58);
+        long start = System.currentTimeMillis();
+        for (long i = 0; i < fileSize / (58); i++) {
+            writeBuffer.clear();
+            while (writeBuffer.remaining() >= 58) {
+                writeBuffer.put(message);
+            }
+            writeBuffer.flip();
+            channel.write(writeBuffer);
         }
-
-        byteBuffer.flip();
-        while (byteBuffer.hasRemaining()){
-            System.out.println(byteBuffer.getInt());
-        }
+        System.out.println("单线程顺序写入" + fileSize + "字节，每次写入 58 字节，耗时 " + (System.currentTimeMillis() - start) + " ms");
+        randomAccessFile.close();
     }
 
+    /**
+     * 单线程顺序写入，每次写入2k字节
+     *
+     * @throws Exception
+     */
+    @Test
+    public void test18() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test3.data", "rw");
+        FileChannel channel = randomAccessFile.getChannel();
+        int singleMessageSize = 58;
+        byte[] message = new byte[singleMessageSize];
+        Arrays.fill(message, (byte) 'a');
+        // 写入 10g 数据
+        long fileSize = 1L * 1024 * 1024 * 1024;
+        ByteBuffer writeBuffer = ByteBuffer.allocateDirect(2 * 1024);
+        long start = System.currentTimeMillis();
+        for (long i = 0; i < fileSize / (2 * 1024); i++) {
+            writeBuffer.clear();
+            while (writeBuffer.remaining() >= 58) {
+                writeBuffer.put(message);
+            }
+            writeBuffer.flip();
+            channel.write(writeBuffer);
+        }
+        System.out.println("单线程顺序写入" + fileSize + "字节，每次写入 2k 字节，耗时 " + (System.currentTimeMillis() - start) + " ms");
+        randomAccessFile.close();
+    }
+
+    /**
+     * 单线程顺序写入，每次写入4k字节
+     *
+     * @throws Exception
+     */
+    @Test
+    public void test20() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test4.data", "rw");
+        FileChannel channel = randomAccessFile.getChannel();
+        int singleMessageSize = 58;
+        byte[] message = new byte[singleMessageSize];
+        Arrays.fill(message, (byte) 'a');
+        // 写入 10g 数据
+        long fileSize = 1L * 1024 * 1024 * 1024;
+        ByteBuffer writeBuffer = ByteBuffer.allocateDirect(4 * 1024);
+        long start = System.currentTimeMillis();
+        for (long i = 0; i < fileSize / (4 * 1024); i++) {
+            writeBuffer.clear();
+            while (writeBuffer.remaining() > singleMessageSize) {
+                writeBuffer.put(message);
+            }
+            writeBuffer.flip();
+            channel.write(writeBuffer);
+        }
+        System.out.println("单线程顺序写入" + fileSize + "字节，每次写入 4k 字节，耗时 " + (System.currentTimeMillis() - start) + " ms");
+        randomAccessFile.close();
+    }
+
+    /**
+     * 单线程顺序写入，每次写入8k字节
+     * 单线程顺序写入1073741824字节，每次写入 8k 字节，耗时 3556 ms
+     *
+     * @throws Exception
+     */
+    @Test
+    public void test21() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test5.data", "rw");
+        FileChannel channel = randomAccessFile.getChannel();
+        int singleMessageSize = 58;
+        byte[] message = new byte[singleMessageSize];
+        Arrays.fill(message, (byte) 'a');
+        // 写入 10g 数据
+        long fileSize = 1L * 1024 * 1024 * 1024;
+        ByteBuffer writeBuffer = ByteBuffer.allocateDirect(8 * 1024);
+        long start = System.currentTimeMillis();
+        for (long i = 0; i < fileSize / (8 * 1024); i++) {
+            writeBuffer.clear();
+            while (writeBuffer.remaining() >= singleMessageSize) {
+                writeBuffer.put(message);
+            }
+            writeBuffer.flip();
+            channel.write(writeBuffer);
+        }
+        System.out.println("单线程顺序写入" + fileSize + "字节，每次写入 8k 字节，耗时 " + (System.currentTimeMillis() - start) + " ms");
+        randomAccessFile.close();
+    }
+
+    @Test
+    public void test22() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test6.data", "rw");
+        FileChannel channel = randomAccessFile.getChannel();
+        int singleMessageSize = 58;
+        byte[] message = new byte[singleMessageSize];
+        Arrays.fill(message, (byte) 'a');
+        // 写入 10g 数据
+        long fileSize = 1L * 1024 * 1024 * 1024;
+        ByteBuffer writeBuffer = ByteBuffer.allocateDirect(16 * 1024);
+        long start = System.currentTimeMillis();
+        for (long i = 0; i < fileSize / (16 * 1024); i++) {
+            writeBuffer.clear();
+            while (writeBuffer.remaining() >= singleMessageSize) {
+                writeBuffer.put(message);
+            }
+            writeBuffer.flip();
+            channel.write(writeBuffer);
+        }
+        System.out.println("单线程顺序写入" + fileSize + "字节，每次写入 16k 字节，耗时 " + (System.currentTimeMillis() - start) + " ms");
+        randomAccessFile.close();
+    }
+
+    @Test
+    public void test23() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test7.data", "rw");
+        FileChannel channel = randomAccessFile.getChannel();
+        int singleMessageSize = 58;
+        byte[] message = new byte[singleMessageSize];
+        Arrays.fill(message, (byte) 'a');
+        // 写入 10g 数据
+        long fileSize = 10L * 1024 * 1024 * 1024;
+        ByteBuffer writeBuffer = ByteBuffer.allocateDirect(1024 * 1024);
+        long start = System.currentTimeMillis();
+        for (long i = 0; i < fileSize / (1024 * 1024); i++) {
+            writeBuffer.clear();
+            while (writeBuffer.remaining() >= singleMessageSize) {
+                writeBuffer.put(message);
+            }
+            writeBuffer.flip();
+            channel.write(writeBuffer);
+        }
+        System.out.println("单线程顺序写入" + fileSize + "字节，每次写入 1M 字节，耗时 " + (System.currentTimeMillis() - start) + " ms");
+        randomAccessFile.close();
+    }
+
+    @Test
+    public void test24() throws Exception {
+        String dir = "/Users/kirito/data/";
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test8.data", "rw");
+        FileChannel channel = randomAccessFile.getChannel();
+        int singleMessageSize = 58;
+        byte[] message = new byte[singleMessageSize];
+        Arrays.fill(message, (byte) 'a');
+        ExecutorService executorService = Executors.newFixedThreadPool(10);
+        AtomicLong wrotePosition = new AtomicLong(0);
+        // 写入 10g 数据
+        long fileSize = 10L * 1024 * 1024 * 1024;
+        ThreadLocal<ByteBuffer> writeBufferHolder = ThreadLocal.withInitial(() -> ByteBuffer.allocateDirect(4 * 1024));
+        long start = System.currentTimeMillis();
+        CountDownLatch countDownLatch = new CountDownLatch((int) (fileSize / (4 * 1024)));
+        for (long i = 0; i < fileSize / (4 * 1024); i++) {
+            executorService.execute(new Runnable() {
+                @Override
+                public void run() {
+                    long position = wrotePosition.getAndAdd(4 * 1024);
+                    ByteBuffer writeBuffer = writeBufferHolder.get();
+                    writeBuffer.clear();
+                    while (writeBuffer.remaining() >= singleMessageSize) {
+                        writeBuffer.put(message);
+                    }
+                    writeBuffer.flip();
+                    try {
+                        channel.write(writeBuffer, position);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    countDownLatch.countDown();
+                }
+            });
+        }
+        countDownLatch.await();
+        System.out.println("10 线程顺序随机写入" + fileSize + "字节，每次写入 4k 字节，耗时 " + (System.currentTimeMillis() - start) + " ms");
+        randomAccessFile.close();
+    }
 
 
 }

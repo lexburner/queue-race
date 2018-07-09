@@ -5,7 +5,6 @@ import java.io.RandomAccessFile;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -15,21 +14,16 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-//        public static final String dir = "/Users/kirito/data/";
+//            public static final String dir = "/Users/kirito/data/";
     public static final String dir = "/alidata1/race2018/data/";
 //    public static final String dir = "C:\\Users\\Administrator\\Desktop\\data\\";
 //    public static final String dir = "/Users/user/tmp/";
-
-
-    //    public Map<String, Queue> queueMap = new ConcurrentHashMap<>();
-    public static Collection<byte[]> EMPTY = new ArrayList<>();
     private static final int FILE_SIZE = 1;
-    private ConcurrentHashMap<String, Queue>[] queueMaps;
-
     // FILE_INDEX can be different from FILE_SIZE
     private static final int FILE_INDEX = 1;
-
-
+    //    public Map<String, Queue> queueMap = new ConcurrentHashMap<>();
+    public static Collection<byte[]> EMPTY = new ArrayList<>();
+    private ConcurrentHashMap<String, Queue>[] queueMaps;
     private FileChannel[] channels;
     private AtomicLong[] wrotePositions;
 
@@ -70,7 +64,7 @@ public class DefaultQueueStoreImpl extends QueueStore {
                 // 双重检测
                 queue = queueMaps[index].get(queueName);
                 if (queue == null) {
-                     queue = new Queue(channels[index], wrotePositions[index]);
+                    queue = new Queue(channels[index], wrotePositions[index]);
                     queueMaps[index].put(queueName, queue);
                 }
             }
