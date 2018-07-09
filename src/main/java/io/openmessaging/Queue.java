@@ -16,10 +16,10 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Queue {
 
     public final static int SINGLE_MESSAGE_SIZE = 58;
-    public final static int BLOCK_SIZE = 60;
+    public final static int BLOCK_SIZE = 40;
     // 缓冲区大小
     public final static int bufferSize = SINGLE_MESSAGE_SIZE * BLOCK_SIZE;
-    private static final int size = 2000 / BLOCK_SIZE + 1;
+    private static final int size = 2000 / BLOCK_SIZE + 10;
     private static final byte FILL_BYTE = (byte) 0;
     private FileChannel channel;
     private AtomicLong wrotePosition;
@@ -107,11 +107,10 @@ public class Queue {
         offsets[blockSize] = this.offset;
         queueIndexes[blockSize] = this.queueIndex;
         blockSize++;
-        if (blockSize > offsets.length * 0.7) {
+        if (blockSize > offsets.length * 0.9) {
             offsets = copyOf(offsets, offsets.length * 2);
             queueIndexes = copyOf(queueIndexes, queueIndexes.length * 2);
         }
-
         this.queueIndex += BLOCK_SIZE;
     }
 
@@ -125,7 +124,6 @@ public class Queue {
             e.printStackTrace();
         }
         buffer.clear();
-//        ((DirectBuffer) buffer).cleaner().clean();
 
         offsets[blockSize] = this.offset;
         queueIndexes[blockSize] = this.queueIndex;
@@ -141,12 +139,8 @@ public class Queue {
      */
     public synchronized Collection<byte[]> get(long offset, long num) {
         if (firstGet) {
-            synchronized (this) {
-                if (firstGet) {
-                    flushForGet();
-                    firstGet = false;
-                }
-            }
+            flushForGet();
+            firstGet = false;
         }
         if (offset > queueLength - 1) {
             return DefaultQueueStoreImpl.EMPTY;

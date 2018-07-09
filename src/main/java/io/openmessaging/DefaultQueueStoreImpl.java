@@ -16,11 +16,11 @@ public class DefaultQueueStoreImpl extends QueueStore {
 
     //public static final String dir = "/Users/kirito/data/";
     public static final String dir = "/alidata1/race2018/data/";
-    //    public static final String dir = "C:\\Users\\Administrator\\Desktop\\data\\";
+//        public static final String dir = "C:\\Users\\Administrator\\Desktop\\data\\";
 //    public static final String dir = "/Users/user/tmp/";
-    private static final int FILE_SIZE = 128;
+    private static final int FILE_SIZE = 70;
     // FILE_INDEX can be different from FILE_SIZE
-    private static final int FILE_INDEX = 128;
+    private static final int FILE_INDEX = 70;
 
     public static Collection<byte[]> EMPTY = new ArrayList<>();
     private ConcurrentHashMap<String, Queue>[] queueMaps;
