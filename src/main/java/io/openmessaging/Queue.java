@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Queue {
 
     public final static int SINGLE_MESSAGE_SIZE = 58;
-    public final static int BLOCK_SIZE = 70;
+    public final static int BLOCK_SIZE = 30;
 
     private FileChannel channel;
     private AtomicLong wrotePosition;
@@ -27,7 +27,7 @@ public class Queue {
     }
 
     // 缓冲区大小
-    public final static int bufferSize = 4 * 1024;
+    public final static int bufferSize = SINGLE_MESSAGE_SIZE * BLOCK_SIZE;
 
     // 读写缓冲区
     private ByteBuffer buffer = ByteBuffer.allocateDirect(bufferSize);
@@ -35,7 +35,6 @@ public class Queue {
     private int lastReadOffset = -1;
 
     private static final int size = 2000 / BLOCK_SIZE + 1;
-//    private static final int size = 2000;
 
     // 记录该块在物理文件中的起始偏移量
     private long offsets[] = new long[size];
@@ -69,11 +68,11 @@ public class Queue {
         }
         // 缓冲区满，先落盘
         if (SINGLE_MESSAGE_SIZE > buffer.remaining()) {
-            if(buffer.hasRemaining()){
-                byte[] fillBytes = new byte[buffer.remaining()];
-                Arrays.fill(fillBytes, FILL_BYTE);
-                buffer.put(fillBytes);
-            }
+//            if(buffer.hasRemaining()){
+//                byte[] fillBytes = new byte[buffer.remaining()];
+//                Arrays.fill(fillBytes, FILL_BYTE);
+//                buffer.put(fillBytes);
+//            }
             // 落盘
             flush();
         }
@@ -176,7 +175,7 @@ public class Queue {
         int endBlock = endIndex / BLOCK_SIZE;
 
         for (int j = startBlock; j <= endBlock; j++) {
-            int blockStartIndex = j *BLOCK_SIZE;
+            int blockStartIndex = j * BLOCK_SIZE;
 
             buffer.clear();
             try {
