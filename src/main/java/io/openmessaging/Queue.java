@@ -16,7 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class Queue {
 
     public final static int SINGLE_MESSAGE_SIZE = 58;
-    public final static int BLOCK_SIZE = 40;
+    public final static int BLOCK_SIZE = 60;
     // 缓冲区大小
     public final static int bufferSize = SINGLE_MESSAGE_SIZE * BLOCK_SIZE;
     private static final int size = 2000 / BLOCK_SIZE + 1;

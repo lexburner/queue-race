@@ -14,14 +14,14 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-//            public static final String dir = "/Users/kirito/data/";
+    //public static final String dir = "/Users/kirito/data/";
     public static final String dir = "/alidata1/race2018/data/";
-//    public static final String dir = "C:\\Users\\Administrator\\Desktop\\data\\";
+    //    public static final String dir = "C:\\Users\\Administrator\\Desktop\\data\\";
 //    public static final String dir = "/Users/user/tmp/";
-    private static final int FILE_SIZE = 20;
+    private static final int FILE_SIZE = 128;
     // FILE_INDEX can be different from FILE_SIZE
-    private static final int FILE_INDEX = 20;
-    //    public Map<String, Queue> queueMap = new ConcurrentHashMap<>();
+    private static final int FILE_INDEX = 128;
+
     public static Collection<byte[]> EMPTY = new ArrayList<>();
     private ConcurrentHashMap<String, Queue>[] queueMaps;
     private FileChannel[] channels;
