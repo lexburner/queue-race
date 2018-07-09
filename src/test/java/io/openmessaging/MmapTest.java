@@ -554,7 +554,7 @@ public class MmapTest {
     @Test
     public void test17() throws Exception {
         String dir = "/Users/kirito/data/";
-        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "test1.data", "rw");
+        RandomAccessFile randomAccessFile = new RandomAccessFile(dir + "testSingleThread.data", "rw");
         FileChannel channel = randomAccessFile.getChannel();
         int singleMessageSize = 58;
         byte[] message = new byte[singleMessageSize];
