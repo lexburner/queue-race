@@ -14,34 +14,31 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class DefaultQueueStoreImpl extends QueueStore {
 
-    //public static final String dir = "/Users/kirito/data/";
-    public static final String dir = "/alidata1/race2018/data/";
+//    public static final String dir = "/Users/kirito/data/";
+        public static final String dir = "/alidata1/race2018/data/";
 //        public static final String dir = "C:\\Users\\Administrator\\Desktop\\data\\";
 //    public static final String dir = "/Users/user/tmp/";
-    private static final int FILE_SIZE = 70;
-    // FILE_INDEX can be different from FILE_SIZE
-    private static final int FILE_INDEX = 70;
+    private static final int FILE_SIZE = 1;
+    private static final int FILE_MAP_SIZE = 20;
 
     public static Collection<byte[]> EMPTY = new ArrayList<>();
-    private ConcurrentHashMap<String, Queue>[] queueMaps;
-    private FileChannel[] channels;
-    private AtomicLong[] wrotePositions;
+    private ConcurrentHashMap<String,Queue>[] queueMap;
+    private FileChannel channel;
+    private AtomicLong wrotePosition;
 
     public DefaultQueueStoreImpl() {
-        channels = new FileChannel[FILE_SIZE];
-        wrotePositions = new AtomicLong[FILE_SIZE];
-        queueMaps = new ConcurrentHashMap[FILE_INDEX];
-        for (int i = 0; i < FILE_SIZE; i++) {
+        queueMap = new ConcurrentHashMap[FILE_MAP_SIZE];
+        for (int i = 0; i < FILE_MAP_SIZE; i++) {
+            queueMap[i] = new ConcurrentHashMap<>();
+        }
             RandomAccessFile memoryMappedFile = null;
             try {
-                memoryMappedFile = new RandomAccessFile(dir + "all_" + i + ".data", "rw");
+                memoryMappedFile = new RandomAccessFile(dir + "all.data", "rw");
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             }
-            queueMaps[i] = new ConcurrentHashMap<>();
-            this.channels[i] = memoryMappedFile.getChannel();
-            this.wrotePositions[i] = new AtomicLong(0L);
-        }
+            this.channel = memoryMappedFile.getChannel();
+            this.wrotePosition = new AtomicLong(0L);
     }
 
 
@@ -56,16 +53,16 @@ public class DefaultQueueStoreImpl extends QueueStore {
      */
     @Override
     public void put(String queueName, byte[] message) {
-        int index = Math.abs(queueName.hashCode()) % FILE_SIZE;
+        int index = Math.abs(queueName.hashCode()) % FILE_MAP_SIZE;
         Queue queue;
-        queue = queueMaps[index].get(queueName);
+        queue = queueMap[index].get(queueName);
         if (queue == null) {
             synchronized (this) {
                 // 双重检测
-                queue = queueMaps[index].get(queueName);
+                queue = queueMap[index].get(queueName);
                 if (queue == null) {
-                    queue = new Queue(channels[index], wrotePositions[index]);
-                    queueMaps[index].put(queueName, queue);
+                    queue = new Queue(this.channel, this.wrotePosition);
+                    queueMap[index].put(queueName, queue);
                 }
             }
         }
@@ -85,8 +82,8 @@ public class DefaultQueueStoreImpl extends QueueStore {
      */
     @Override
     public Collection<byte[]> get(String queueName, long offset, long num) {
-        int index = Math.abs(queueName.hashCode()) % FILE_SIZE;
-        Queue queue = queueMaps[index].get(queueName);
+        int index = Math.abs(queueName.hashCode()) % FILE_MAP_SIZE;
+        Queue queue = queueMap[index].get(queueName);
         if (queue == null) {
             return EMPTY;
         }
