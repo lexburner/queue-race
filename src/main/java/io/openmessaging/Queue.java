@@ -7,6 +7,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Vector;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -27,6 +37,7 @@ public class Queue {
     private volatile boolean firstPut = true;
     // 读写缓冲区
     private ByteBuffer buffer = ByteBuffer.allocateDirect(bufferSize);
+
     //
     private int lastReadOffset = -1;
     // 记录该块在物理文件中的起始偏移量
@@ -39,13 +50,20 @@ public class Queue {
      * 队列的总块数
      */
     private int blockSize = 0;
+
+    Vector<ByteBuffer> byteBuffers = new Vector<>();
     /**
      * 队列的总消息数
      */
     private int queueLength = 0;
+
+
+    private static BlockingQueue<Vector<ByteBuffer>> QUEUE = new LinkedBlockingQueue<>(10);
+
     public Queue(FileChannel channel, AtomicLong wrotePosition) {
         this.channel = channel;
         this.wrotePosition = wrotePosition;
+        initPool();
     }
 
     public static int[] copyOf(int[] original, int newLength) {
@@ -74,8 +92,25 @@ public class Queue {
         }
         // 缓冲区满，先落盘
         if (SINGLE_MESSAGE_SIZE > buffer.remaining()) {
-            // 落盘
-            flush();
+/*            if (byteBuffers.size() >= 1) {
+                try {
+                    QUEUE.put(byteBuffers);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } finally {
+                    byteBuffers.clear();
+                }
+            }*/
+
+            byteBuffers.add(buffer);
+            try {
+                QUEUE.put(byteBuffers);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                byteBuffers.clear();
+                buffer.clear();
+            }
         }
         if (message.length < SINGLE_MESSAGE_SIZE) {
             byte[] newMessage = new byte[SINGLE_MESSAGE_SIZE];
@@ -92,16 +127,55 @@ public class Queue {
         this.queueLength++;
     }
 
-    private void flush() {
-        buffer.flip();
+    public void initPool() {
+        QUEUE = new LinkedBlockingQueue<>(10);
+        final ExecutorService executorService = Executors.newFixedThreadPool(1);
+        final int threadNum = 1;
+        for (int i = 0; i < threadNum; i++) {
+            executorService.execute(new Worker());
+        }
+
+    }
+
+    class Worker implements Runnable {
+
+        @Override
+        public void run() {
+            execute();
+        }
+
+        private void execute() {
+            while (true) {
+                try {
+                    //得到需要的对象
+                    Vector<ByteBuffer> handles = QUEUE.take();
+                    if (handles.size() >= 1) {
+//                        System.out.println("vector size: " + handles.size());
+                        handles.forEach(bf -> {
+                            flush(bf);
+                            bf.clear();
+                        });
+                        handles.clear();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+        }
+    }
+
+
+    private void flush(ByteBuffer bf) {
+        bf.flip();
         long writePosition = wrotePosition.getAndAdd(bufferSize);
         this.offset = writePosition;
         try {
-            channel.write(buffer, writePosition);
+            channel.write(bf, writePosition);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        buffer.clear();
+        bf.clear();
 
 
         offsets[blockSize] = this.offset;
